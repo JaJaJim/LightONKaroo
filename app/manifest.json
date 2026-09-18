@@ -1,0 +1,11 @@
+{
+  "label": "LightONKaroo",
+  "packageName": "io.github.JaJaJim.lightonkaroo",
+  "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/v0.0.2/LightONKaroo-v0.0.2.apk",
+  "latestVersion": "0.0.2",
+  "latestVersionCode": 2,
+  "developer": "Peter Weber",
+  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo. Toggle lights ON/OFF via data field.",
+  "releaseNotes": "* Initial release of LightONKaroo fork\n* Manual toggle functionality\n* Removed automatic sensors for simplicity"
+}
