@@ -6,6 +6,6 @@
   "latestVersion": "0.1.0-alpha",
   "latestVersionCode": 10,
   "developer": "Peter Weber",
-  "description": "Professional manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3.",
+  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3.",
   "releaseNotes": "* View-Aware rotation (Battery saving)\n* 3-Stage Battery indicator (Good/Medium/Low)\n* Radar battery fallback for rear lights\n* Full-height Logo background UI\n* Cleaned codebase"
 }

@@ -18,7 +18,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 ## 🚀 Features
 - **One-Tap Toggle**: The main purpose! Turn all configured lights to their predefined modes by tapping the data field.
 - **Customizable Modes**: Configure separate modes for "ON" and "OFF" states (e.g., Steady High for ON, Slow Flash for OFF).
-- **Status Rotation**: Optional data field rotation showing the actual device name, connection status, and battery level for all lights. To save space, info alternates every 5 seconds and uses scrolling text for long names.
+- **Status Rotation**: Optional data field rotation showing the actual device name, connection status, and battery level for all lights. Info cycles every 5 seconds.
 - **Intelligent Battery Monitoring**:
   - **3-Stage Logic**: Clear "Good", "Medium", and "Low" labels with color coding.
   - **Radar Fallback**: For rear lights, the app automatically pulls battery data from the linked Radar sensor if the light profile doesn't provide it.
@@ -34,8 +34,8 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 📝 Changelog
 ### v0.1.0-alpha
-- **FIX**: Stabilized UI layout. The primary ON/OFF status now has a fixed central position to avoid distractions when the secondary info text wraps.
-- **FIX**: Alternating info text (Name/Status vs Battery) to fit long device names in small data fields.
+- **UI**: Implemented a centered 4-line layout in the data field (Global Status, Device Name, Device Mode, Battery Level).
+- **FIX**: Adjusted info cycling to prevent UI overlaps in small data fields.
 - **OPTIMIZATION**: Implemented "View-Aware" rotation to reduce CPU impact.
 - **IMPROVEMENT**: Simplified battery display (Good/Medium/Low) for better readability.
 - **IMPROVEMENT**: Added "Radar Fallback" for rear light battery monitoring.
