@@ -50,6 +50,10 @@ class LightStatusDataType(
         emitter.onNext(UpdateGraphicConfig(showHeader = false))
 
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val ext = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+
+        // Start rotation when data field is visible
+        ext?.startDisplayRotation()
 
         scope.launch {
             combine(engine.activeZone, engine.displayInfo) { zone, info -> zone to info }
@@ -69,8 +73,8 @@ class LightStatusDataType(
                         val deviceNameStatus = if (info.deviceName.isNotEmpty()) "${info.deviceName} ${info.statusText}" else info.statusText
                         remoteViews.setTextViewText(R.id.light_device_name, deviceNameStatus)
                         
-                        var batteryText = if (info.batteryPercent != null) "Battery: ${info.batteryPercent}%" else ""
-                        if (info.batteryPercent != null && info.batteryFromRadar) {
+                        var batteryText = if (info.batteryLabel.isNotEmpty()) "Battery: ${info.batteryLabel}" else ""
+                        if (info.batteryLabel.isNotEmpty() && info.batteryFromRadar) {
                             batteryText += " (Radar)"
                         }
                         remoteViews.setTextViewText(R.id.light_battery_text, batteryText)
@@ -92,6 +96,10 @@ class LightStatusDataType(
                 }
         }
 
-        emitter.setCancellable { scope.cancel() }
+        emitter.setCancellable {
+            // Stop rotation when data field is no longer visible
+            ext?.stopDisplayRotation()
+            scope.cancel()
+        }
     }
 }

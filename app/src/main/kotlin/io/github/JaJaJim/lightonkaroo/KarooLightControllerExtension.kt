@@ -145,13 +145,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             if (connected) {
                 setupConsumers()
                 loadSettings()
-                startDisplayRotation()
             }
         }
     }
 
-    private fun startDisplayRotation() {
-        displayRotationJob?.cancel()
+    internal fun startDisplayRotation() {
+        if (displayRotationJob != null) return
         displayRotationJob = extensionScope.launch {
             var currentIndex = 0
             while (true) {
@@ -164,24 +163,22 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     val statusText = when {
                         light == null -> "OFFLINE"
                         !light.connected -> "SEARCHING"
-                        light.currentMode == "OFF" -> "OFF"
-                        else -> "ON"
+                        else -> light.currentMode?.replace("_", " ") ?: "CONNECTED"
                     }
 
                     val battery = light?.batteryPercent
-                    val batteryColor = when {
-                        battery == null -> 0xFFAAAAAA.toInt()
-                        battery >= 40 -> 0xFF00FF00.toInt() // Green
-                        battery >= 25 -> 0xFFFFFF00.toInt() // Yellow
-                        battery >= 10 -> 0xFFFFA500.toInt() // Orange
-                        else -> 0xFFFF0000.toInt() // Red
+                    val (batteryLabel, batteryColor) = when {
+                        battery == null -> "" to 0xFFAAAAAA.toInt()
+                        battery > 50 -> "Good" to 0xFF00FF00.toInt() // Green
+                        battery >= 25 -> "Medium" to 0xFFFFA500.toInt() // Orange
+                        else -> "Low" to 0xFFFF0000.toInt() // Red
                     }
 
                     engine.updateDisplayInfo(
                         io.github.JaJaJim.lightonkaroo.engine.DisplayInfo(
                             deviceName = assignment.deviceName,
                             statusText = statusText,
-                            batteryPercent = battery,
+                            batteryLabel = batteryLabel,
                             batteryColor = batteryColor,
                             batteryFromRadar = light?.batteryFromRadar ?: false
                         )
@@ -193,6 +190,11 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 kotlinx.coroutines.delay(5000)
             }
         }
+    }
+
+    internal fun stopDisplayRotation() {
+        displayRotationJob?.cancel()
+        displayRotationJob = null
     }
 
     private fun setupConsumers() {
@@ -278,6 +280,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
+            startDisplayRotation()
             // Turn everything truly OFF for configuration session
             extensionScope.launch {
                 // Small delay to ensure binders are ready
@@ -289,10 +292,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         } else {
             if (!rideActive) {
                 stopDiscoveryPolling()
+                stopDisplayRotation()
                 lightControl.unbind()
-            } else {
-                // Restore ride state when leaving settings
-                engine.onApplyZone?.invoke(engine.activeZone.value)
             }
             stopBleIfNotNeeded()
         }
@@ -370,11 +371,11 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             Timber.d("$TAG: Querying Karoo for saved bike light devices")
             savedDevicesConsumerId = karooSystem.addConsumer<SavedDevices> { savedDevices ->
                 fun translateBattery(name: String?): Int? = when (name) {
-                    "GOOD" -> 80
+                    "GOOD", "NEW" -> 80
                     "OK" -> 50
                     "LOW" -> 20
                     "CRITICAL" -> 5
-                    else -> null
+                    else -> if (name != null) 100 else null
                 }
 
                 // 1. Collect all batteries from enabled devices that are NOT lights (type 35)

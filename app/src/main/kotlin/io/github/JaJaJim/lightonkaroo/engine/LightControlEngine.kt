@@ -18,7 +18,7 @@ import timber.log.Timber
 data class DisplayInfo(
     val deviceName: String = "",
     val statusText: String = "",
-    val batteryPercent: Int? = null,
+    val batteryLabel: String = "",
     val batteryColor: Int = 0xFFFFFFFF.toInt(),
     val batteryFromRadar: Boolean = false,
 )
