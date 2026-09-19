@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
@@ -242,12 +241,6 @@ private fun ProtocolBadge(protocol: LightProtocol) {
                     .padding(horizontal = 4.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    Icons.Default.Bluetooth,
-                    contentDescription = "BLE",
-                    modifier = Modifier.size(10.dp),
-                    tint = Color.White,
-                )
                 Text(
                     "BLE",
                     style = MaterialTheme.typography.labelSmall,

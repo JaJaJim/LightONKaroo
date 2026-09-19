@@ -18,22 +18,24 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 ## 🚀 Features
 - **One-Tap Toggle**: The main purpose! Turn all configured lights to their predefined modes by tapping the data field.
 - **Customizable Modes**: Configure separate modes for "ON" and "OFF" states (e.g., Steady High for ON, Slow Flash for OFF).
-- **Status Rotation**: Optional data field rotation showing the actual device name, connection status, and battery level for all lights.
+- **Status Rotation**: Optional data field rotation showing the actual device name, connection status, and battery level for all lights. To save space, info alternates every 5 seconds and uses scrolling text for long names.
 - **Intelligent Battery Monitoring**:
   - **3-Stage Logic**: Clear "Good", "Medium", and "Low" labels with color coding.
   - **Radar Fallback**: For rear lights, the app automatically pulls battery data from the linked Radar sensor if the light profile doesn't provide it.
 - **Ride Efficiency**:
   - **View-Aware**: Status rotation is only active when the data field is visible on screen to save battery.
-  - **Optional Cleanup**: If configured, truly turns off lights after finishing your ride to save power.
+  - **Optional Cleanup**: If configured ("Turn off lights after finishing ride"), truly turns off lights after your ride to save power.
   - **Pause Safety**: Option to switch to a safety mode (configured OFF-mode) instead of complete shutdown when pausing.
 
-## 🚲 Hardware Compatibility
+## 🚲 Hardware Tested
 - **Tested Hardware**: Magene AT1200 (Front), Coospo TR70 (Rear Radar), Raveman FR300 ANT+ (Front), Cycplus L7 (Rear Radar).
 - **ANT+**: Should work with most smart bike lights (Garmin Varia, Bontrager Ion, Flare, etc.) as long as the Karoo recognizes them as light sensors. 
 - **Bluetooth (BLE)**: Support for Magicshine (M1/M2/M3) is inherited from the original project but is **currently completely untested**.
 
 ## 📝 Changelog
 ### v0.1.0-alpha
+- **FIX**: Stabilized UI layout. The primary ON/OFF status now has a fixed central position to avoid distractions when the secondary info text wraps.
+- **FIX**: Alternating info text (Name/Status vs Battery) to fit long device names in small data fields.
 - **OPTIMIZATION**: Implemented "View-Aware" rotation to reduce CPU impact.
 - **IMPROVEMENT**: Simplified battery display (Good/Medium/Low) for better readability.
 - **IMPROVEMENT**: Added "Radar Fallback" for rear light battery monitoring.

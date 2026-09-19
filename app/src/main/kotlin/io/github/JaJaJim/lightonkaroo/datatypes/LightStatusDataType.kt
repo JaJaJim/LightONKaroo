@@ -68,10 +68,11 @@ class LightStatusDataType(
                     // Detailed rotation info
                     if (engine.settings.showDetailedStatus) {
                         remoteViews.setViewVisibility(R.id.light_device_name, android.view.View.VISIBLE)
+                        remoteViews.setViewVisibility(R.id.light_device_status, android.view.View.VISIBLE)
                         remoteViews.setViewVisibility(R.id.light_battery_text, android.view.View.VISIBLE)
 
-                        val deviceNameStatus = if (info.deviceName.isNotEmpty()) "${info.deviceName} ${info.statusText}" else info.statusText
-                        remoteViews.setTextViewText(R.id.light_device_name, deviceNameStatus)
+                        remoteViews.setTextViewText(R.id.light_device_name, info.deviceName)
+                        remoteViews.setTextViewText(R.id.light_device_status, info.statusText)
                         
                         var batteryText = if (info.batteryLabel.isNotEmpty()) "Battery: ${info.batteryLabel}" else ""
                         if (info.batteryLabel.isNotEmpty() && info.batteryFromRadar) {
@@ -81,6 +82,7 @@ class LightStatusDataType(
                         remoteViews.setTextColor(R.id.light_battery_text, info.batteryColor)
                     } else {
                         remoteViews.setViewVisibility(R.id.light_device_name, android.view.View.GONE)
+                        remoteViews.setViewVisibility(R.id.light_device_status, android.view.View.GONE)
                         remoteViews.setViewVisibility(R.id.light_battery_text, android.view.View.GONE)
                     }
 

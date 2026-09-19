@@ -168,7 +168,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
                     val battery = light?.batteryPercent
                     val (batteryLabel, batteryColor) = when {
-                        battery == null -> "" to 0xFFAAAAAA.toInt()
+                        battery == null -> "Unknown" to 0xFFAAAAAA.toInt()
                         battery > 50 -> "Good" to 0xFF00FF00.toInt() // Green
                         battery >= 25 -> "Medium" to 0xFFFFA500.toInt() // Orange
                         else -> "Low" to 0xFFFF0000.toInt() // Red
