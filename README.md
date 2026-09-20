@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.0-alpha
+# LightONKaroo v0.1.2 "Janus"
 
 **LightONKaroo** is a manual bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride.
 
@@ -16,41 +16,56 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 *If this is not done, the Karoo firmware and this extension will fight for control of the light.*
 
 ## 🚀 Features
-- **One-Tap Toggle**: The main purpose! Turn all configured lights to their predefined modes by tapping the data field.
-- **Customizable Modes**: Configure separate modes for "ON" and "OFF" states (e.g., Steady High for ON, Slow Flash for OFF).
-- **Status Rotation**: Optional data field rotation showing the actual device name, connection status, and battery level for all lights. Info cycles every 5 seconds.
-- **Intelligent Battery Monitoring**:
-  - **3-Stage Logic**: Clear "Good", "Medium", and "Low" labels with color coding.
-  - **Radar Fallback**: For rear lights, the app automatically pulls battery data from the linked Radar sensor if the light profile doesn't provide it.
-- **Ride Efficiency**:
-  - **View-Aware**: Status rotation is only active when the data field is visible on screen to save battery.
-  - **Optional Cleanup**: If configured ("Turn off lights after finishing ride"), truly turns off lights after your ride to save power.
-  - **Pause Safety**: Option to switch to a safety mode (configured OFF-mode) instead of complete shutdown when pausing.
+- **Janus Split-Field Control**: 
+  - **Left Tap**: Toggles between Primary and Secondary ON modes.
+  - **Right Tap**: Turns lights OFF (or toggles in classic mode).
+  - **Classic Mode**: Standard ON/OFF toggle available via settings.
+- **Customizable Modes**: Configure Primary ON, Secondary ON, and OFF states for each light.
+- **Custom Light Names**: Rename your lights (e.g., "Helmet Light") directly in the extension settings.
+- **Intelligent Status UI**: 
+  - Top-left lamp indicator (Authentic Karoo Turquoise when ON, White when OFF).
+  - Visual Battery Icons (Full/Half/Empty) with color-coded alerts.
+  - Adjustable rotation speed (5 to 30 seconds).
+  - **Radar Fallback**: For rear lights, automatically pulls battery data from the linked Radar sensor.
+- **Advanced Ride Control**:
+  - Auto-on when starting a ride.
+  - **Customizable Pause Behavior**: Choose between doing nothing, switching to OFF mode, Primary, Secondary, or truly turning lights OFF.
+  - **Auto-Cleanup**: Truly turns off lights after finishing your ride to save power.
+- **Efficiency**:
+  - **View-Aware**: Rotation only runs when the data field is visible on screen.
+  - **Massive Diät**: APK size reduced from 14MB to 3.8MB.
 
-## 🚲 Hardware Tested
+## 🚲 Hardware Compatibility
 - **Tested Hardware**: Magene AT1200 (Front), Coospo TR70 (Rear Radar), Raveman FR300 ANT+ (Front), Cycplus L7 (Rear Radar).
-- **ANT+**: Should work with most smart bike lights (Garmin Varia, Bontrager Ion, Flare, etc.) as long as the Karoo recognizes them as light sensors. 
-- **Bluetooth (BLE)**: Support for Magicshine (M1/M2/M3) is inherited from the original project but is **currently completely untested**.
+- **ANT+**: Works with most smart lights recognized by Karoo.
+- **Bluetooth (BLE)**: Support for Magicshine inherited but **completely untested**.
 
 ## 📝 Changelog
+### v0.1.2 "Janus"
+- **NEW**: Split-Field Control (Janus Mode). Left side toggles Primary/Secondary, Right side turns OFF.
+- **NEW**: Added "Secondary ON Mode" configuration for every light.
+- **NEW**: Customizable "Ride Pause Behavior" (None, OFF, Primary, Secondary, Hard-OFF).
+- **NEW**: Smart Resume: Automatically restores the light mode used before the pause.
+- **NEW**: Custom nickname selection to fix Karoo's naming limitations.
+- **NEW**: Rotation speed slider (5s to 30s steps) in settings.
+- **UI**: Authentic Karoo Turquoise (#27D9B4) and high-contrast Yellow status labels.
+- **UI**: Dynamic battery icons (Full for Good, Half for Medium, Empty for Low).
+- **UI**: Top-left lamp status indicator.
+- **FIX**: Resolved "black screen" issues by simplifying the layout.
+
 ### v0.1.0-alpha
-- **UI**: Implemented a centered 4-line layout in the data field (Global Status, Device Name, Device Mode, Battery Level).
-- **FIX**: Adjusted info cycling to prevent UI overlaps in small data fields.
-- **OPTIMIZATION**: Implemented "View-Aware" rotation to reduce CPU impact.
-- **IMPROVEMENT**: Simplified battery display (Good/Medium/Low) for better readability.
-- **IMPROVEMENT**: Added "Radar Fallback" for rear light battery monitoring.
-- **UI**: Added Logo background in the data field with high-contrast text.
-- **CLEANUP**: Removed all unneeded auto-sensor code.
+- Initial major alpha release with View-Aware logic and Radar fallback.
 
 ### v0.0.3
-- Added configurable OFF-Mode (e.g., use blinking instead of true power-off).
-- Added status rotation (Name, Status, Battery %) and color-coding.
-- Improved SVG rendering and centering.
+- Added configurable OFF-Mode.
+- Added status rotation and color-coding.
+- **Improved SVG rendering** and centering for custom logo.
+- **Intelligent battery fallback**: Rear lights can now pull data from linked Radar.
 
 ### v0.0.2
 - Initial fork and rebranding.
 - Integrated custom logo.
-- Simplified logic to manual control only.
+- Simplified manual control logic.
 
 ## 📜 License
 Licensed under the **MIT License**.

@@ -21,10 +21,19 @@ data class LightAssignment(
     val role: LightRole,
     val protocol: LightProtocol = LightProtocol.ANT_PLUS,
     val activeMode: String = "OFF",
+    val secondaryMode: String = "OFF",
     val modeOff: String = "OFF",
     val radarWarnFlash: Boolean = false,
+    val nickname: String = "",
 ) {
-    fun modeForZone(zone: DayTimeZone?): String = if (zone != null) activeMode else modeOff
+    fun modeForState(state: Int): String = when (state) {
+        1 -> activeMode
+        2 -> secondaryMode
+        else -> modeOff
+    }
+
+    val displayName: String
+        get() = if (nickname.isNotEmpty()) nickname else deviceName
 }
 
 data class LightModeOption(
@@ -78,8 +87,10 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
 data class LightControllerSettings(
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
-    val autoOffOnPause: Boolean = false,
+    val pauseBehavior: String = "NONE", // NONE, OFF, PRIMARY, SECONDARY, HARD_OFF
     val showDetailedStatus: Boolean = true,
+    val threeModeEnabled: Boolean = false,
+    val rotationSpeedSeconds: Int = 5,
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {

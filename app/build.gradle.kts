@@ -35,8 +35,8 @@ android {
         applicationId = "io.github.JaJaJim.lightonkaroo"
         minSdk = 23
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.1.0-alpha"
+        versionCode = 13
+        versionName = "0.1.2"
         buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
     }
 

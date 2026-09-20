@@ -27,8 +27,9 @@ class LightControlEngine {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _activeZone = MutableStateFlow<DayTimeZone?>(null)
-    val activeZone: StateFlow<DayTimeZone?> = _activeZone
+    // 0 = OFF, 1 = PRIMARY, 2 = SECONDARY
+    private val _activeState = MutableStateFlow(0)
+    val activeState: StateFlow<Int> = _activeState
 
     private val _displayInfo = MutableStateFlow(DisplayInfo())
     val displayInfo: StateFlow<DisplayInfo> = _displayInfo
@@ -37,22 +38,41 @@ class LightControlEngine {
         _displayInfo.value = info
     }
 
+    private var lastOnState = 1
+    private var stateBeforePause: Int? = null
+
     @Volatile var settings: LightControllerSettings = LightControllerSettings()
-    var onApplyZone: ((DayTimeZone?) -> Unit)? = null
+    var onApplyState: ((Int) -> Unit)? = null
     var onApplyHardwareOff: (() -> Unit)? = null
 
     fun onRideStart() {
-        Timber.d("LightControlEngine: ride started")
-        if (settings.autoOnWithRide) {
-            applyZone(DayTimeZone.DAY)
+        Timber.d("LightControlEngine: ride started/resumed")
+        val restoredState = stateBeforePause
+        if (restoredState != null) {
+            // Restore the state we had before the pause
+            applyState(restoredState)
+            stateBeforePause = null
+        } else if (settings.autoOnWithRide) {
+            // Initial start of the ride
+            applyState(1)
         }
     }
 
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
-        if (settings.autoOffOnPause) {
-            // Switch to configured OFF Mode (e.g. blinking) when pausing
-            applyZone(null)
+        if (settings.pauseBehavior == "NONE") return
+        
+        // Remember current state to restore it later
+        stateBeforePause = _activeState.value
+        
+        when (settings.pauseBehavior) {
+            "OFF" -> applyState(0)
+            "PRIMARY" -> applyState(1)
+            "SECONDARY" -> applyState(2)
+            "HARD_OFF" -> {
+                onApplyHardwareOff?.invoke()
+                _activeState.value = 0 // Update UI to show OFF
+            }
         }
     }
 
@@ -64,16 +84,43 @@ class LightControlEngine {
     }
 
     fun onToggleLights() {
-        if (_activeZone.value != null) {
-            applyZone(null)
+        if (settings.threeModeEnabled) {
+            // In 3-mode, tap toggles ON states
+            when (_activeState.value) {
+                0 -> applyState(lastOnState) // Turn back ON
+                1 -> applyState(2)           // Switch Primary -> Secondary
+                2 -> applyState(1)           // Switch Secondary -> Primary
+            }
         } else {
-            applyZone(DayTimeZone.DAY)
+            // Classical ON/OFF toggle
+            if (_activeState.value == 0) {
+                applyState(1)
+            } else {
+                applyState(0)
+            }
         }
     }
 
-    private fun applyZone(zone: DayTimeZone?) {
-        _activeZone.value = zone
-        onApplyZone?.invoke(zone)
+    fun onRightClick() {
+        if (settings.threeModeEnabled) {
+            if (_activeState.value == 0) {
+                applyState(lastOnState) // Turn ON if it was OFF
+            } else {
+                applyState(0) // Turn OFF if it was ON
+            }
+        } else {
+            onToggleLights() // Standard toggle on both sides if disabled
+        }
+    }
+
+    fun setOff() {
+        applyState(0)
+    }
+
+    private fun applyState(state: Int) {
+        _activeState.value = state
+        if (state != 0) lastOnState = state
+        onApplyState?.invoke(state)
     }
 
     fun destroy() {

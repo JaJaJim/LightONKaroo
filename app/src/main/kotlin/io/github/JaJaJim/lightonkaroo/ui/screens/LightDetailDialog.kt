@@ -1,6 +1,5 @@
 package io.github.JaJaJim.lightonkaroo.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,8 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,8 +47,10 @@ fun LightDetailDialog(
     val modes = modeProviderFor(light.protocol, light.id).availableModes()
     var role by remember(assignment) { mutableStateOf(assignment?.role) }
     var activeMode by remember(assignment) { mutableStateOf(assignment?.activeMode ?: "OFF") }
+    var secondaryMode by remember(assignment) { mutableStateOf(assignment?.secondaryMode ?: "OFF") }
     var modeOff by remember(assignment) { mutableStateOf(assignment?.modeOff ?: "OFF") }
     var radarWarnFlash by remember(assignment) { mutableStateOf(assignment?.radarWarnFlash ?: false) }
+    var nickname by remember(assignment) { mutableStateOf(assignment?.nickname ?: "") }
 
     fun save() {
         if (role != null) {
@@ -62,8 +61,10 @@ fun LightDetailDialog(
                     role = role!!,
                     protocol = light.protocol,
                     activeMode = activeMode,
+                    secondaryMode = secondaryMode,
                     modeOff = modeOff,
                     radarWarnFlash = radarWarnFlash,
+                    nickname = nickname,
                 ),
             )
         } else {
@@ -169,13 +170,43 @@ fun LightDetailDialog(
                 if (role != null) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                    InlineDropdown(
+                        label = "Display Name",
+                        selectedId = if (nickname.isEmpty()) "Standard" else nickname,
+                        options = listOf(
+                            "Standard" to "Default",
+                            "Front Light" to "Front Light",
+                            "Rear Light" to "Rear Light",
+                            "Helmet Light" to "Helmet Light",
+                            "Pedal Light" to "Pedal Light",
+                            "Trailer Light" to "Trailer Light",
+                            "Radar Light" to "Radar Light"
+                        ),
+                        onSelected = { selected ->
+                            nickname = if (selected == "Standard") "" else selected
+                            save()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                     ModeRow(
-                        label = "ON Mode",
+                        label = "Primary ON Mode",
                         selectedMode = activeMode,
                         modes = modes,
                         onSelected = { activeMode = it; save() },
                         onTest = if (onTestMode != null && light.connected) {
                             { onTestMode(light.id, activeMode) }
+                        } else null,
+                    )
+
+                    ModeRow(
+                        label = "Secondary ON Mode",
+                        selectedMode = secondaryMode,
+                        modes = modes,
+                        onSelected = { secondaryMode = it; save() },
+                        onTest = if (onTestMode != null && light.connected) {
+                            { onTestMode(light.id, secondaryMode) }
                         } else null,
                     )
 
@@ -242,47 +273,6 @@ private fun ModeRow(
                     contentDescription = "Test $label",
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InlineDropdown(
-    label: String,
-    selectedId: String,
-    options: List<Pair<String, String>>,
-    onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val displayName = options.find { it.first == selectedId }?.second ?: selectedId
-
-    Row(
-        modifier = modifier
-            .clickable { expanded = true }
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "$label: ",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            displayName,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { (id, name) ->
-                DropdownMenuItem(
-                    text = { Text(name) },
-                    onClick = { onSelected(id); expanded = false },
                 )
             }
         }

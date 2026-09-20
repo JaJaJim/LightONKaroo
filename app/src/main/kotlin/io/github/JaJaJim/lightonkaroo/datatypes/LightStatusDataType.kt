@@ -32,11 +32,11 @@ class LightStatusDataType(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         scope.launch {
-            engine.activeZone.collect { activeZone ->
+            engine.activeState.collect { activeState ->
                 emitter.onNext(
                     StreamState.Streaming(
                         DataPoint(dataTypeId = dataTypeId, values = mapOf(
-                            FIELD_ACTIVE to if (activeZone != null) 1.0 else 0.0,
+                            FIELD_ACTIVE to if (activeState != 0) 1.0 else 0.0,
                         )),
                     ),
                 )
@@ -56,43 +56,77 @@ class LightStatusDataType(
         ext?.startDisplayRotation()
 
         scope.launch {
-            combine(engine.activeZone, engine.displayInfo) { zone, info -> zone to info }
-                .collect { (activeZone, info) ->
+            combine(engine.activeState, engine.displayInfo) { state, info -> state to info }
+                .collect { (activeState, info) ->
                     val remoteViews = RemoteViews(context.packageName, R.layout.light_status_view)
 
-                    val globalStatusText = if (activeZone != null) "ON" else "OFF"
+                    val globalStatusText = when (activeState) {
+                        1 -> if (engine.settings.threeModeEnabled) "PRIMARY" else "ON"
+                        2 -> "SECONDARY"
+                        else -> "OFF"
+                    }
                     remoteViews.setTextViewText(R.id.light_mode_text, globalStatusText)
-                    val globalColor = if (activeZone != null) android.graphics.Color.YELLOW else android.graphics.Color.WHITE
+                    val globalColor = if (activeState != 0) android.graphics.Color.parseColor("#f5e315") else android.graphics.Color.WHITE
+                    val indicatorColor = if (activeState != 0) android.graphics.Color.parseColor("#27D9B4") else android.graphics.Color.WHITE
                     remoteViews.setTextColor(R.id.light_mode_text, globalColor)
+
+                    // Top-left indicator icon
+                    remoteViews.setInt(R.id.light_indicator_tiny, "setColorFilter", indicatorColor)
 
                     // Detailed rotation info
                     if (engine.settings.showDetailedStatus) {
                         remoteViews.setViewVisibility(R.id.light_device_name, android.view.View.VISIBLE)
                         remoteViews.setViewVisibility(R.id.light_device_status, android.view.View.VISIBLE)
-                        remoteViews.setViewVisibility(R.id.light_battery_text, android.view.View.VISIBLE)
+                        remoteViews.setViewVisibility(R.id.light_battery_row, android.view.View.VISIBLE)
 
                         remoteViews.setTextViewText(R.id.light_device_name, info.deviceName)
                         remoteViews.setTextViewText(R.id.light_device_status, info.statusText)
                         
-                        var batteryText = if (info.batteryLabel.isNotEmpty()) "Battery: ${info.batteryLabel}" else ""
+                        var batteryText = if (info.batteryLabel.isNotEmpty()) info.batteryLabel else ""
                         if (info.batteryLabel.isNotEmpty() && info.batteryFromRadar) {
                             batteryText += " (Radar)"
                         }
                         remoteViews.setTextViewText(R.id.light_battery_text, batteryText)
                         remoteViews.setTextColor(R.id.light_battery_text, info.batteryColor)
+
+                        // Update battery icon based on level
+                        val batteryIconRes = when (info.batteryLabel) {
+                            "Good" -> R.drawable.ic_battery_good
+                            "Medium" -> R.drawable.ic_battery_medium
+                            else -> R.drawable.ic_battery_low
+                        }
+                        remoteViews.setImageViewResource(R.id.light_battery_icon, batteryIconRes)
+                        remoteViews.setInt(R.id.light_battery_icon, "setColorFilter", info.batteryColor)
                     } else {
                         remoteViews.setViewVisibility(R.id.light_device_name, android.view.View.GONE)
                         remoteViews.setViewVisibility(R.id.light_device_status, android.view.View.GONE)
-                        remoteViews.setViewVisibility(R.id.light_battery_text, android.view.View.GONE)
+                        remoteViews.setViewVisibility(R.id.light_battery_row, android.view.View.GONE)
                     }
 
-                    val intent = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS").apply {
+                    val intentLeft = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT").apply {
                         setPackage(context.packageName)
                     }
-                    val pendingIntent = PendingIntent.getBroadcast(
-                        context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    val pendingLeft = PendingIntent.getBroadcast(
+                        context, 0, intentLeft, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    remoteViews.setOnClickPendingIntent(R.id.light_status_root, pendingIntent)
+                    remoteViews.setOnClickPendingIntent(R.id.light_status_left, pendingLeft)
+
+                    val intentRight = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_RIGHT").apply {
+                        setPackage(context.packageName)
+                    }
+                    val pendingRight = PendingIntent.getBroadcast(
+                        context, 1, intentRight, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    remoteViews.setOnClickPendingIntent(R.id.light_status_right, pendingRight)
+                    
+                    // Fallback for older Karoo system/settings: keep root clickable to turn ON
+                    val intentRoot = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT").apply {
+                        setPackage(context.packageName)
+                    }
+                    val pendingRoot = PendingIntent.getBroadcast(
+                        context, 2, intentRoot, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    remoteViews.setOnClickPendingIntent(R.id.light_status_root, pendingRoot)
 
                     emitter.updateView(remoteViews)
                 }

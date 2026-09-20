@@ -22,8 +22,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,16 +59,20 @@ fun SettingsScreen(
 ) {
     var autoOn by remember(settings) { mutableStateOf(settings.autoOnWithRide) }
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
-    var autoOffPause by remember(settings) { mutableStateOf(settings.autoOffOnPause) }
+    var pauseBehavior by remember(settings) { mutableStateOf(settings.pauseBehavior) }
     var showDetailedStatus by remember(settings) { mutableStateOf(settings.showDetailedStatus) }
+    var threeModeEnabled by remember(settings) { mutableStateOf(settings.threeModeEnabled) }
+    var rotationSpeed by remember(settings) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
 
     fun saveSettings() {
         onSave(
             settings.copy(
                 autoOnWithRide = autoOn,
                 autoOffWithRide = autoOff,
-                autoOffOnPause = autoOffPause,
+                pauseBehavior = pauseBehavior,
                 showDetailedStatus = showDetailedStatus,
+                threeModeEnabled = threeModeEnabled,
+                rotationSpeedSeconds = rotationSpeed.toInt()
             ),
         )
     }
@@ -185,8 +192,18 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Switch lights to configured OFF Mode when pausing", modifier = Modifier.weight(1f))
-            Switch(checked = autoOffPause, onCheckedChange = { autoOffPause = it; saveSettings() })
+            InlineDropdown(
+                label = "Ride Pause Behavior",
+                selectedId = pauseBehavior,
+                options = listOf(
+                    "NONE" to "Do nothing",
+                    "OFF" to "Configured OFF Mode",
+                    "PRIMARY" to "Primary ON",
+                    "SECONDARY" to "Secondary ON",
+                    "HARD_OFF" to "Truly turn OFF"
+                ),
+                onSelected = { pauseBehavior = it; saveSettings() }
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -207,8 +224,41 @@ fun SettingsScreen(
             Switch(checked = showDetailedStatus, onCheckedChange = { showDetailedStatus = it; saveSettings() })
         }
 
+        if (showDetailedStatus) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Column {
+                Text(
+                    "Rotation Speed: ${rotationSpeed.toInt()}s",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Slider(
+                    value = rotationSpeed,
+                    onValueChange = { rotationSpeed = it },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = 5f..30f,
+                    steps = 4 // 5, 10, 15, 20, 25, 30
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Enable 3-mode control (Janus Mode)")
+                Text(
+                    "Split field: Left toggles Primary/Secondary, Right turns OFF.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = threeModeEnabled, onCheckedChange = { threeModeEnabled = it; saveSettings() })
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
@@ -227,6 +277,47 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
+    }
+}
+
+@Composable
+fun InlineDropdown(
+    label: String,
+    selectedId: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val displayName = options.find { it.first == selectedId }?.second ?: selectedId
+
+    Row(
+        modifier = modifier
+            .clickable { expanded = true }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "$label: ",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { (id, name) ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = { onSelected(id); expanded = false },
+                )
+            }
+        }
     }
 }
 

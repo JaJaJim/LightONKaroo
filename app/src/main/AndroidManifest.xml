@@ -46,6 +46,8 @@
         <receiver android:name=".datatypes.LightToggleReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS" />
+                <action android:name="io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT" />
+                <action android:name="io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_RIGHT" />
             </intent-filter>
         </receiver>
 

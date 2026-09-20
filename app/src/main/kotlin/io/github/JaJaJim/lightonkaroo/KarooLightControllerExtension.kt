@@ -97,13 +97,13 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         lightControllers[LightProtocol.BLE] = magicshineController
         magicshineController.onDeviceConnected = {
             stopBleIfNotNeeded()
-            engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
+            engine.onApplyState?.invoke(engine.activeState.value)
         }
         engine = LightControlEngine()
 
-        engine.onApplyZone = { zone ->
+        engine.onApplyState = { state ->
             for (assignment in engine.settings.lightAssignments) {
-                val modeName = assignment.modeForZone(zone)
+                val modeName = assignment.modeForState(state)
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
             updateRadarMonitoring()
@@ -137,7 +137,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         // When the SensorService light session becomes ready (we bind lazily on ride/UI),
         // re-apply the current zone so ANT+ lights catch up despite the async bind.
         lightControl.onServiceReady = {
-            engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
+            engine.onApplyState?.invoke(engine.activeState.value)
         }
 
         karooSystem.connect { connected ->
@@ -154,7 +154,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         displayRotationJob = extensionScope.launch {
             var currentIndex = 0
             while (true) {
-                val assignments = engine.settings.lightAssignments
+                // Only cycle through lights that have a role assigned
+                val assignments = engine.settings.lightAssignments.filter { it.role != null }
                 if (assignments.isNotEmpty()) {
                     currentIndex %= assignments.size
                     val assignment = assignments[currentIndex]
@@ -169,14 +170,14 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     val battery = light?.batteryPercent
                     val (batteryLabel, batteryColor) = when {
                         battery == null -> "Unknown" to 0xFFAAAAAA.toInt()
-                        battery > 50 -> "Good" to 0xFF00FF00.toInt() // Green
-                        battery >= 25 -> "Medium" to 0xFFFFA500.toInt() // Orange
-                        else -> "Low" to 0xFFFF0000.toInt() // Red
+                        battery > 50 -> "Good" to 0xFF27D9B4.toInt() // Authentic Karoo Turquoise
+                        battery >= 25 -> "Medium" to 0xFFf5e315.toInt() // Yellow
+                        else -> "Low" to 0xFFf86263.toInt() // Red
                     }
 
                     engine.updateDisplayInfo(
                         io.github.JaJaJim.lightonkaroo.engine.DisplayInfo(
-                            deviceName = assignment.deviceName,
+                            deviceName = assignment.displayName,
                             statusText = statusText,
                             batteryLabel = batteryLabel,
                             batteryColor = batteryColor,
@@ -187,7 +188,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 } else {
                     engine.updateDisplayInfo(io.github.JaJaJim.lightonkaroo.engine.DisplayInfo(statusText = "No Lights"))
                 }
-                kotlinx.coroutines.delay(5000)
+                kotlinx.coroutines.delay(engine.settings.rotationSpeedSeconds * 1000L)
             }
         }
     }
@@ -294,6 +295,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 stopDiscoveryPolling()
                 stopDisplayRotation()
                 lightControl.unbind()
+            } else {
+                // Restore ride state when leaving settings
+                engine.onApplyState?.invoke(engine.activeState.value)
             }
             stopBleIfNotNeeded()
         }
@@ -446,13 +450,14 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         }
     }
 
-    private fun buildModeDetail(zone: DayTimeZone?): String {
+    private fun buildModeDetail(state: Int): String {
+        if (state == 0) return "Lights Off"
         return engine.settings.lightAssignments.joinToString("\n") {
             val roleLabel = when (it.role) {
                 LightRole.FRONT -> "F"
                 LightRole.REAR -> "R"
             }
-            val modeId = it.modeForZone(zone)
+            val modeId = it.modeForState(state)
             val displayName = modeProviderFor(it.protocol, it.deviceId)
                 .availableModes()
                 .find { m -> m.id == modeId }?.displayName ?: modeId
@@ -465,13 +470,18 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         when (actionId) {
             "toggle-lights" -> {
                 engine.onToggleLights()
-                val status = if (engine.activeZone.value != null) "ON" else "OFF"
+                val state = engine.activeState.value
+                val status = when (state) {
+                    1 -> "PRIMARY ON"
+                    2 -> "SECONDARY ON"
+                    else -> "OFF"
+                }
                 karooSystem.dispatch(
                     InRideAlert(
                         id = "light-toggle",
                         icon = R.drawable.ic_light,
                         title = "Lights $status",
-                        detail = buildModeDetail(engine.activeZone.value),
+                        detail = buildModeDetail(state),
                         autoDismissMs = 3000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
@@ -516,8 +526,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         for (assignment in engine.settings.lightAssignments) {
             if (!assignment.radarWarnFlash) continue
-            val zone = engine.activeZone.value
-            if (zone != null) continue
+            val state = engine.activeState.value
+            if (state != 0) continue
 
             val modeName = if (threatDetected) "FAST_FLASH" else assignment.modeOff
             lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
