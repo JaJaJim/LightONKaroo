@@ -130,13 +130,7 @@ fun LightDetailDialog(
 
                 val telemetryParts = mutableListOf<String>()
                 light.batteryPercent?.let {
-                    val label = when {
-                        it > 50 -> "Good"
-                        it >= 25 -> "Medium"
-                        else -> "Low"
-                    }
-                    var text = "Battery: $label"
-                    if (light.batteryFromRadar) text += " (from Radar)"
+                    var text = if (light.batteryFromRadar) "Radar Battery" else "Battery"
                     telemetryParts.add(text)
                 }
                 light.temperature?.let { telemetryParts.add("Temp: ${it}°C") }

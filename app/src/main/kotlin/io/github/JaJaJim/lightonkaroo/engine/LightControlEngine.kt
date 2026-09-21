@@ -78,9 +78,11 @@ class LightControlEngine {
 
     fun onRideStop() {
         Timber.d("LightControlEngine: ride stopped")
+        stateBeforePause = null // Clear any pause state
         if (settings.autoOffWithRide) {
             onApplyHardwareOff?.invoke()
         }
+        _activeState.value = 0 // ALWAYS ensure internal state is OFF for next session
     }
 
     fun onToggleLights() {

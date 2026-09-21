@@ -66,12 +66,34 @@ class LightStatusDataType(
                         else -> "OFF"
                     }
                     remoteViews.setTextViewText(R.id.light_mode_text, globalStatusText)
-                    val globalColor = if (activeState != 0) android.graphics.Color.parseColor("#f5e315") else android.graphics.Color.WHITE
-                    val indicatorColor = if (activeState != 0) android.graphics.Color.parseColor("#27D9B4") else android.graphics.Color.WHITE
+                    val globalColor = if (activeState != 0) android.graphics.Color.parseColor("#ffe714") else android.graphics.Color.WHITE
+                    val indicatorColor = if (activeState != 0) android.graphics.Color.parseColor("#32e09a") else android.graphics.Color.WHITE
                     remoteViews.setTextColor(R.id.light_mode_text, globalColor)
 
                     // Top-left indicator icon
                     remoteViews.setInt(R.id.light_indicator_tiny, "setColorFilter", indicatorColor)
+
+                    // UI Customization: Logo and Glow
+                    remoteViews.setViewVisibility(R.id.light_icon, if (engine.settings.showLogo) android.view.View.VISIBLE else android.view.View.GONE)
+                    
+                    val intensity = engine.settings.glowIntensity
+                    if (intensity > 0) {
+                        remoteViews.setViewVisibility(R.id.light_glow_layer, android.view.View.VISIBLE)
+                        // Map intensity 1-5 to alpha 0.2 - 1.0
+                        val alphaValue = intensity / 5.0f
+                        remoteViews.setFloat(R.id.light_glow_layer, "setAlpha", alphaValue)
+                        
+                        if (activeState != 0) {
+                            remoteViews.setImageViewResource(R.id.light_glow_layer, R.drawable.glow_left)
+                        } else {
+                            remoteViews.setImageViewResource(R.id.light_glow_layer, R.drawable.glow_right)
+                        }
+                    } else {
+                        remoteViews.setViewVisibility(R.id.light_glow_layer, android.view.View.GONE)
+                    }
+
+                    // Reset flat tint on original logo to restore its punch
+                    remoteViews.setInt(R.id.light_icon, "setColorFilter", android.graphics.Color.TRANSPARENT)
 
                     // Detailed rotation info
                     if (engine.settings.showDetailedStatus) {
@@ -82,11 +104,9 @@ class LightStatusDataType(
                         remoteViews.setTextViewText(R.id.light_device_name, info.deviceName)
                         remoteViews.setTextViewText(R.id.light_device_status, info.statusText)
                         
-                        var batteryText = if (info.batteryLabel.isNotEmpty()) info.batteryLabel else ""
-                        if (info.batteryLabel.isNotEmpty() && info.batteryFromRadar) {
-                            batteryText += " (Radar)"
-                        }
-                        remoteViews.setTextViewText(R.id.light_battery_text, batteryText)
+                        // Only show (Radar) suffix, no more "Good/Medium/Low" text
+                        val batterySuffix = if (info.batteryFromRadar) "(Radar)" else ""
+                        remoteViews.setTextViewText(R.id.light_battery_text, batterySuffix)
                         remoteViews.setTextColor(R.id.light_battery_text, info.batteryColor)
 
                         // Update battery icon based on level

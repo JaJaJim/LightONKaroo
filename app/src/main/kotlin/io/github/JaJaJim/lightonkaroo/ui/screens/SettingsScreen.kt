@@ -63,6 +63,8 @@ fun SettingsScreen(
     var showDetailedStatus by remember(settings) { mutableStateOf(settings.showDetailedStatus) }
     var threeModeEnabled by remember(settings) { mutableStateOf(settings.threeModeEnabled) }
     var rotationSpeed by remember(settings) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
+    var showLogo by remember(settings) { mutableStateOf(settings.showLogo) }
+    var glowIntensity by remember(settings) { mutableStateOf(settings.glowIntensity.toFloat()) }
 
     fun saveSettings() {
         onSave(
@@ -72,7 +74,9 @@ fun SettingsScreen(
                 pauseBehavior = pauseBehavior,
                 showDetailedStatus = showDetailedStatus,
                 threeModeEnabled = threeModeEnabled,
-                rotationSpeedSeconds = rotationSpeed.toInt()
+                rotationSpeedSeconds = rotationSpeed.toInt(),
+                showLogo = showLogo,
+                glowIntensity = glowIntensity.toInt()
             ),
         )
     }
@@ -155,6 +159,26 @@ fun SettingsScreen(
                 onDelete = { onDeleteLight(light) },
                 onDismiss = { selectedLight = null },
             )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Enable 3-mode control (Janus Mode)")
+                Text(
+                    "Split field: Left toggles Primary/Secondary, Right turns OFF.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = threeModeEnabled, onCheckedChange = { threeModeEnabled = it; saveSettings() })
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -243,20 +267,35 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // UI Customization
+        Text("Data Field Appearance", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(12.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Enable 3-mode control (Janus Mode)")
-                Text(
-                    "Split field: Left toggles Primary/Secondary, Right turns OFF.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = threeModeEnabled, onCheckedChange = { threeModeEnabled = it; saveSettings() })
+            Text("Show background logo")
+            Switch(checked = showLogo, onCheckedChange = { showLogo = it; saveSettings() })
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column {
+            Text(
+                "Background Glow Intensity: ${glowIntensity.toInt()}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Slider(
+                value = glowIntensity,
+                onValueChange = { glowIntensity = it },
+                onValueChangeFinished = { saveSettings() },
+                valueRange = 0f..5f,
+                steps = 4 // 0, 1, 2, 3, 4, 5
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))

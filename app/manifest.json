@@ -2,9 +2,9 @@
   "label": "LightONKaroo",
   "packageName": "io.github.JaJaJim.lightonkaroo",
   "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
-  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.2/LightONKaroo-v0.1.2.apk",
-  "latestVersion": "0.1.2",
-  "latestVersionCode": 13,
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.2-R2/LightONKaroo-v0.1.2-R2.apk",
+  "latestVersion": "0.1.2-R2",
+  "latestVersionCode": 14,
   "developer": "Peter Weber",
   "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3.",
   "releaseNotes": "* Split-Field Control (Janus)\n* Secondary ON Mode selection\n* Custom nicknames for lights\n* Rotation speed slider\n* Battery icons and UI refinements"

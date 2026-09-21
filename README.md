@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.2 "Janus"
+# LightONKaroo v0.1.2-R2 "Janus"
 
 **LightONKaroo** is a manual bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride.
 
@@ -41,7 +41,15 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Support for Magicshine inherited but **completely untested**.
 
 ## 📝 Changelog
-### v0.1.2 "Janus"
+### v0.1.2-R2 "Janus"
+- **NEW**: Customizable "Side-Glow" effect with intensity slider (Stiffness/Punch).
+- **NEW**: Option to hide/show the background logo for a minimalist look.
+- **UI**: Authentic Karoo colors (Turquoise #32e09a, Yellow #ffe714, Red #d34343).
+- **UI**: Improved battery icons (Full for Good, Half for Medium, Empty for Low).
+- **FIX**: Adjusted lamp icon position and font size for better small-field fit.
+- **FIX**: Resolved Auto-On bug where lights would sometimes start even if disabled.
+
+### v0.1.2
 - **NEW**: Split-Field Control (Janus Mode). Left side toggles Primary/Secondary, Right side turns OFF.
 - **NEW**: Added "Secondary ON Mode" configuration for every light.
 - **NEW**: Customizable "Ride Pause Behavior" (None, OFF, Primary, Secondary, Hard-OFF).

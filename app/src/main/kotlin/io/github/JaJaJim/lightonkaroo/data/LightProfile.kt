@@ -91,6 +91,8 @@ data class LightControllerSettings(
     val showDetailedStatus: Boolean = true,
     val threeModeEnabled: Boolean = false,
     val rotationSpeedSeconds: Int = 5,
+    val showLogo: Boolean = true,
+    val glowIntensity: Int = 3,
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {
