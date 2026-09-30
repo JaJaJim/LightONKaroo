@@ -7,14 +7,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -24,9 +22,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightAssignment
@@ -34,42 +35,44 @@ import io.github.JaJaJim.lightonkaroo.data.LightModeOption
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
 import io.github.JaJaJim.lightonkaroo.data.modeProviderFor
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun LightDetailDialog(
     light: DiscoveredLight,
     assignment: LightAssignment?,
     onUpdateAssignment: (LightAssignment?) -> Unit,
-    onTestMode: ((String, String) -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    onTestMode: ((deviceId: String, modeId: String) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    val modes = modeProviderFor(light.protocol, light.id).availableModes()
-    var role by remember(assignment) { mutableStateOf(assignment?.role) }
+    var enabled by remember(assignment) { mutableStateOf(assignment?.enabled ?: true) }
+    var useForThreatMode by remember(assignment) { mutableStateOf(if (light.protocol == LightProtocol.ANT_PLUS) (assignment?.useForThreatMode ?: false) else false) }
     var activeMode by remember(assignment) { mutableStateOf(assignment?.activeMode ?: "OFF") }
     var secondaryMode by remember(assignment) { mutableStateOf(assignment?.secondaryMode ?: "OFF") }
     var modeOff by remember(assignment) { mutableStateOf(assignment?.modeOff ?: "OFF") }
-    var radarWarnFlash by remember(assignment) { mutableStateOf(assignment?.radarWarnFlash ?: false) }
     var nickname by remember(assignment) { mutableStateOf(assignment?.nickname ?: "") }
 
+    val modes = remember(light.id, light.protocol) {
+        modeProviderFor(light.protocol, light.id).availableModes()
+    }
+
     fun save() {
-        if (role != null) {
-            onUpdateAssignment(
-                LightAssignment(
-                    deviceId = light.id,
-                    deviceName = light.name,
-                    role = role!!,
-                    protocol = light.protocol,
-                    activeMode = activeMode,
-                    secondaryMode = secondaryMode,
-                    modeOff = modeOff,
-                    radarWarnFlash = radarWarnFlash,
-                    nickname = nickname,
-                ),
-            )
-        } else {
-            onUpdateAssignment(null)
-        }
+        onUpdateAssignment(
+            LightAssignment(
+                deviceId = light.id,
+                deviceName = light.name,
+                role = assignment?.role ?: LightRole.REAR,
+                protocol = light.protocol,
+                enabled = enabled,
+                useForThreatMode = if (light.protocol == LightProtocol.ANT_PLUS) useForThreatMode else false,
+                activeMode = activeMode,
+                secondaryMode = secondaryMode,
+                modeOff = modeOff,
+                nickname = nickname,
+            ),
+        )
     }
 
     val protocolLabel = when (light.protocol) {
@@ -84,7 +87,7 @@ fun LightDetailDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Light") },
-            text = { Text("Remove ${light.name}? Role and mode settings will be deleted.") },
+            text = { Text("Remove ${light.name}? Settings will be deleted.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
@@ -130,7 +133,7 @@ fun LightDetailDialog(
 
                 val telemetryParts = mutableListOf<String>()
                 light.batteryPercent?.let {
-                    var text = if (light.batteryFromRadar) "Radar Battery" else "Battery"
+                    val text = if (light.batteryFromRadar) "Radar Battery" else "Battery"
                     telemetryParts.add(text)
                 }
                 light.temperature?.let { telemetryParts.add("Temp: ${it}°C") }
@@ -144,24 +147,29 @@ fun LightDetailDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                InlineDropdown(
-                    label = "Role",
-                    selectedId = role?.name ?: "None",
-                    options = listOf("FRONT" to "Front", "REAR" to "Rear", "None" to "None"),
-                    onSelected = { selected ->
-                        role = when (selected) {
-                            "FRONT" -> LightRole.FRONT
-                            "REAR" -> LightRole.REAR
-                            else -> null
-                        }
-                        if (role != null && activeMode == "OFF") {
-                            activeMode = modes.getOrNull(1)?.id ?: "OFF"
-                        }
-                        save()
-                    },
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Active Light", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Enable light control and status monitoring",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = {
+                            enabled = it
+                            save()
+                        },
+                    )
+                }
 
-                if (role != null) {
+                if (enabled) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                     InlineDropdown(
@@ -174,12 +182,12 @@ fun LightDetailDialog(
                             "Helmet Light" to "Helmet Light",
                             "Pedal Light" to "Pedal Light",
                             "Trailer Light" to "Trailer Light",
-                            "Radar Light" to "Radar Light"
+                            "Radar Light" to "Radar Light",
                         ),
                         onSelected = { selected ->
                             nickname = if (selected == "Standard") "" else selected
                             save()
-                        }
+                        },
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -189,7 +197,7 @@ fun LightDetailDialog(
                         selectedMode = activeMode,
                         modes = modes,
                         onSelected = { activeMode = it; save() },
-                        onTest = if (onTestMode != null && light.connected) {
+                        onTest = if (onTestMode != null) {
                             { onTestMode(light.id, activeMode) }
                         } else null,
                     )
@@ -199,7 +207,7 @@ fun LightDetailDialog(
                         selectedMode = secondaryMode,
                         modes = modes,
                         onSelected = { secondaryMode = it; save() },
-                        onTest = if (onTestMode != null && light.connected) {
+                        onTest = if (onTestMode != null) {
                             { onTestMode(light.id, secondaryMode) }
                         } else null,
                     )
@@ -209,29 +217,33 @@ fun LightDetailDialog(
                         selectedMode = modeOff,
                         modes = modes,
                         onSelected = { modeOff = it; save() },
-                        onTest = if (onTestMode != null && light.connected) {
+                        onTest = if (onTestMode != null) {
                             { onTestMode(light.id, modeOff) }
                         } else null,
                     )
 
-                    if (role == LightRole.REAR) {
+                    if (light.protocol == LightProtocol.ANT_PLUS) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Radar Warn Flash")
+                                Text("Use for Software Threat Mode", style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "Flash when vehicle detected",
+                                    "Include this light in radar threat response",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Switch(
-                                checked = radarWarnFlash,
-                                onCheckedChange = { radarWarnFlash = it; save() },
+                                checked = useForThreatMode,
+                                onCheckedChange = {
+                                    useForThreatMode = it
+                                    save()
+                                },
                             )
                         }
                     }
@@ -253,20 +265,119 @@ private fun ModeRow(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        InlineDropdown(
-            label = label,
-            selectedId = selectedMode,
-            options = modes.map { it.id to it.displayName },
-            onSelected = onSelected,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            val currentOption = modes.find { it.id == selectedMode }
+            Text(
+                currentOption?.displayName ?: selectedMode,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        var expanded by remember { mutableStateOf(false) }
+
+        IconButton(onClick = { expanded = true }) {
+            Text("▼", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            modes.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.displayName) },
+                    onClick = {
+                        expanded = false
+                        onSelected(mode.id)
+                    },
+                )
+            }
+        }
+
+        var countdownSeconds by remember { mutableStateOf(0) }
+        val scope = rememberCoroutineScope()
+
         if (onTest != null) {
-            IconButton(onClick = onTest, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "Test $label",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+            IconButton(
+                onClick = {
+                    if (countdownSeconds == 0) {
+                        onTest()
+                        scope.launch {
+                            for (sec in 3 downTo 1) {
+                                countdownSeconds = sec
+                                delay(1000L)
+                            }
+                            countdownSeconds = 0
+                        }
+                    }
+                },
+                enabled = countdownSeconds == 0,
+            ) {
+                if (countdownSeconds > 0) {
+                    Text(
+                        "${countdownSeconds}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                } else {
+                    Text(
+                        "▶",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineDropdown(
+    label: String,
+    selectedId: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val displayName = options.find { it.first == selectedId }?.second ?: selectedId
+            Text(
+                displayName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        var expanded by remember { mutableStateOf(false) }
+
+        IconButton(onClick = { expanded = true }) {
+            Text("▼", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { (id, name) ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = {
+                        expanded = false
+                        onSelected(id)
+                    },
                 )
             }
         }

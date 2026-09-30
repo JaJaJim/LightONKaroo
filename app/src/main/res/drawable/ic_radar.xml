@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Radar Arcs (Left) -->
+    <path
+        android:strokeColor="#32E09A"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M 1.5,16.5 A 6.5,6.5 0 0,0 1.5,7.5" />
+    <path
+        android:strokeColor="#32E09A"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M 5,19.5 A 10.5,10.5 0 0,0 5,4.5" />
+
+    <!-- Car Front Outline (Right) -->
+    <!-- Car Body & Roof -->
+    <path
+        android:fillColor="#32E09A"
+        android:pathData="M 13.5,5.5 C 13.8,5 14.3,4.5 15,4.5 H 20 C 20.7,4.5 21.2,5 21.5,5.5 L 23.2,9 H 23.5 C 24,9 24.5,9.5 24.5,10 V 16 C 24.5,16.5 24,17 23.5,17 H 23 V 18.5 C 23,19 22,19 22,18.5 V 17 H 13 V 18.5 C 13,19 12,19 12,18.5 V 17 H 11.5 C 11,17 10.5,16.5 10.5,16 V 10 C 10.5,9.5 11,9 11.5,9 H 11.8 Z" />
+    <!-- Windshield cutout -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M 15.2,5.8 H 19.8 L 21.2,8.5 H 13.8 Z" />
+    <!-- Headlights cutouts -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M 12.5,11.5 H 15.2 V 13.5 H 12.5 Z M 19.8,11.5 H 22.5 V 13.5 H 19.8 Z" />
+</vector>

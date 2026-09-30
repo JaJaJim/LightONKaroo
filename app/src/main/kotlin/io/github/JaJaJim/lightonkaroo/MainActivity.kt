@@ -12,8 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
+import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.PreferencesRepository
-import kotlinx.coroutines.flow.flow
 import io.github.JaJaJim.lightonkaroo.ui.screens.SettingsScreen
 import io.github.JaJaJim.lightonkaroo.ui.theme.AppTheme
 import kotlinx.coroutines.launch
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onDeleteLight = { light ->
-                        if (light.protocol == io.github.JaJaJim.lightonkaroo.data.LightProtocol.BLE) {
+                        if (light.protocol == LightProtocol.BLE) {
                             KarooLightControllerExtension.getInstance()?.magicshineController?.disconnect(light.id)
                         }
                         lifecycleScope.launch {

@@ -1,33 +1,35 @@
 package io.github.JaJaJim.lightonkaroo
 
-import io.hammerhead.karooext.KarooSystemService
-import io.hammerhead.karooext.extension.KarooExtension
-import io.hammerhead.karooext.models.InRideAlert
-import io.hammerhead.karooext.models.ReleaseBluetooth
-import io.hammerhead.karooext.models.RequestBluetooth
-import io.hammerhead.karooext.models.DataType
-import io.hammerhead.karooext.models.OnStreamState
-import io.hammerhead.karooext.models.StreamState
-import io.hammerhead.karooext.models.RideState
-import io.hammerhead.karooext.models.SavedDevices
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
-import io.github.JaJaJim.lightonkaroo.karoo.KarooLightControl
-import io.github.JaJaJim.lightonkaroo.data.DayTimeZone
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
-import io.github.JaJaJim.lightonkaroo.data.modeProviderFor
 import io.github.JaJaJim.lightonkaroo.data.PreferencesRepository
-import io.github.JaJaJim.lightonkaroo.light.LightController
+import io.github.JaJaJim.lightonkaroo.data.modeProviderFor
 import io.github.JaJaJim.lightonkaroo.datatypes.LightStatusDataType
 import io.github.JaJaJim.lightonkaroo.engine.LightControlEngine
+import io.github.JaJaJim.lightonkaroo.karoo.KarooLightControl
+import io.github.JaJaJim.lightonkaroo.light.LightController
+import io.hammerhead.karooext.KarooSystemService
+import io.hammerhead.karooext.extension.KarooExtension
+import io.hammerhead.karooext.models.DataType
+import io.hammerhead.karooext.models.InRideAlert
+import io.hammerhead.karooext.models.OnStreamState
+import io.hammerhead.karooext.models.ReleaseBluetooth
+import io.hammerhead.karooext.models.RequestBluetooth
+import io.hammerhead.karooext.models.RideState
+import io.hammerhead.karooext.models.SavedDevices
+import io.hammerhead.karooext.models.StreamState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -72,10 +74,19 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
     private var savedDevicesConsumerId: String? = null
     private var radarConsumerId: String? = null
-    @Volatile private var radarThreatActive = false
-    private var bleStartJob: kotlinx.coroutines.Job? = null
-    private var discoveryPollingJob: kotlinx.coroutines.Job? = null
-    private var displayRotationJob: kotlinx.coroutines.Job? = null
+    private var radarSimulationJob: Job? = null
+
+    @Volatile
+    var isRadarThreatActive: Boolean = false
+        private set
+
+    private var lastThreatLevel: Int = 0
+    private var lastRadarEventTimestamp = 0L
+
+    private var threatHoldJob: Job? = null
+    private var bleStartJob: Job? = null
+    private var discoveryPollingJob: Job? = null
+    private var displayRotationJob: Job? = null
     @Volatile private var settingsUiActive = false
     @Volatile private var rideActive = false
 
@@ -103,6 +114,14 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         engine.onApplyState = { state ->
             for (assignment in engine.settings.lightAssignments) {
+                if (!assignment.enabled) continue
+
+                // If threat is active, defer mode changes for threat-participating lights until threat clears
+                if (isRadarThreatActive && assignment.useForThreatMode && assignment.protocol == LightProtocol.ANT_PLUS) {
+                    Timber.d("$TAG: Threat active! Deferring physical light change for ${assignment.displayName}")
+                    continue
+                }
+
                 val modeName = assignment.modeForState(state)
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
@@ -111,6 +130,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         engine.onApplyHardwareOff = {
             for (assignment in engine.settings.lightAssignments) {
+                if (!assignment.enabled) continue
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
         }
@@ -121,12 +141,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 _antLights,
                 magicshineController.discoveredLights,
                 lightControl.connectionStates,
-                lightControl.actualModes
+                lightControl.actualModes,
             ) { ant, ble, connStates, actualModes ->
                 ant.map {
                     it.copy(
                         connected = connStates[it.id] == "CONNECTED",
-                        currentMode = actualModes[it.id]
+                        currentMode = actualModes[it.id],
                     )
                 } + ble
             }.collect { merged ->
@@ -134,8 +154,6 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             }
         }
 
-        // When the SensorService light session becomes ready (we bind lazily on ride/UI),
-        // re-apply the current zone so ANT+ lights catch up despite the async bind.
         lightControl.onServiceReady = {
             engine.onApplyState?.invoke(engine.activeState.value)
         }
@@ -154,41 +172,73 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         displayRotationJob = extensionScope.launch {
             var currentIndex = 0
             while (true) {
-                // Only cycle through lights that have a role assigned
-                val assignments = engine.settings.lightAssignments.filter { it.role != null }
+                val assignments = engine.settings.lightAssignments.filter { it.enabled }
+                val discovered = discoveredLights.value
+
+                val allConnected = assignments.isNotEmpty() && assignments.all { assignment ->
+                    discovered.find { it.id == assignment.deviceId }?.connected == true
+                }
+
                 if (assignments.isNotEmpty()) {
-                    currentIndex %= assignments.size
-                    val assignment = assignments[currentIndex]
-                    val light = discoveredLights.value.find { it.id == assignment.deviceId }
+                    val currentInfo = engine.displayInfo.value
+                    if (engine.settings.showDetailedStatus && !currentInfo.isSimulatedRadar && !isRadarThreatActive) {
+                        currentIndex %= assignments.size
+                        val assignment = assignments[currentIndex]
+                        val light = discovered.find { it.id == assignment.deviceId }
 
-                    val statusText = when {
-                        light == null -> "OFFLINE"
-                        !light.connected -> "SEARCHING"
-                        else -> light.currentMode?.replace("_", " ") ?: "CONNECTED"
-                    }
+                        val statusText = when {
+                            light == null -> "OFFLINE"
+                            !light.connected -> "SEARCHING"
+                            else -> light.currentMode?.replace("_", " ") ?: "CONNECTED"
+                        }
 
-                    val battery = light?.batteryPercent
-                    val (batteryLabel, batteryColor) = when {
-                        battery == null -> "Unknown" to 0xFFAAAAAA.toInt()
-                        battery > 50 -> "Good" to 0xFF32e09a.toInt() // Authentic Karoo Turquoise
-                        battery >= 25 -> "Medium" to 0xFFffe714.toInt() // Yellow
-                        else -> "Low" to 0xFFd34343.toInt() // Red
-                    }
+                        val battery = light?.batteryPercent
+                        val (batteryLabel, batteryColor) = when {
+                            battery == null -> "Unknown" to 0xFFAAAAAA.toInt()
+                            battery > 50 -> "Good" to 0xFF32e09a.toInt()
+                            battery >= 25 -> "Medium" to 0xFFffe714.toInt()
+                            else -> "Low" to 0xFFd34343.toInt()
+                        }
 
-                    engine.updateDisplayInfo(
-                        io.github.JaJaJim.lightonkaroo.engine.DisplayInfo(
+                        val nextInfo = currentInfo.copy(
                             deviceName = assignment.displayName,
                             statusText = statusText,
                             batteryLabel = batteryLabel,
                             batteryColor = batteryColor,
-                            batteryFromRadar = light?.batteryFromRadar ?: false
+                            batteryFromRadar = light?.batteryFromRadar ?: false,
+                            allConnected = allConnected,
+                            temperature = light?.temperature,
                         )
-                    )
-                    currentIndex++
+                        if (currentInfo != nextInfo) {
+                            engine.updateDisplayInfo(nextInfo)
+                        }
+                        currentIndex++
+                    } else {
+                        val nextInfo = currentInfo.copy(
+                            allConnected = allConnected,
+                        )
+                        if (currentInfo != nextInfo) {
+                            engine.updateDisplayInfo(nextInfo)
+                        }
+                    }
                 } else {
-                    engine.updateDisplayInfo(io.github.JaJaJim.lightonkaroo.engine.DisplayInfo(statusText = "No Lights"))
+                    val currentInfo = engine.displayInfo.value
+                    val nextInfo = currentInfo.copy(
+                        deviceName = "No Lights",
+                        statusText = "Add in settings",
+                        allConnected = false,
+                    )
+                    if (currentInfo != nextInfo) {
+                        engine.updateDisplayInfo(nextInfo)
+                    }
                 }
-                kotlinx.coroutines.delay(engine.settings.rotationSpeedSeconds * 1000L)
+
+                val speedSec = if (engine.settings.showDetailedStatus) {
+                    engine.settings.rotationSpeedSeconds.coerceAtLeast(1)
+                } else {
+                    5
+                }
+                delay(speedSec * 1000L)
             }
         }
     }
@@ -211,18 +261,35 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 lightControl.bind()
                 engine.onRideStart()
                 startDiscoveryPolling()
-                // (Re)arm BLE for the ride so an assigned light that isn't connected yet
-                // gets discovered and connected mid-ride, not just at extension startup.
                 startBleIfNeeded()
+                // If any assigned BLE light is not connected upon ride start or resume, force start BLE discovery immediately!
+                if (!allAssignedBleConnected()) {
+                    Timber.d("$TAG: Ride recording active/resumed but BLE lights not connected. Forcing BLE discovery scan.")
+                    extensionScope.launch {
+                        karooSystem.dispatch(RequestBluetooth(extension))
+                        magicshineController.startDiscovery()
+                    }
+                }
                 updateRadarMonitoring()
             }
-            is RideState.Paused -> engine.onRidePause()
+            is RideState.Paused -> {
+                engine.onRidePause()
+                // Stop BLE discovery during pause to conserve battery
+                magicshineController.stopDiscovery()
+            }
             is RideState.Idle -> {
                 rideActive = false
                 stopDiscoveryPolling()
                 stopRadarMonitoring()
+                stopRadarSimulation()
                 engine.onRideStop()
-                if (!settingsUiActive) lightControl.unbind()
+                // Wait 1 second for queued OFF commands to transmit over ANT+/BLE before unbinding IPC binder
+                extensionScope.launch {
+                    delay(1000L)
+                    if (!settingsUiActive && !rideActive) {
+                        lightControl.unbind()
+                    }
+                }
             }
         }
     }
@@ -238,12 +305,13 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             engine.settings = settings
             syncBleAssignments()
             startBleIfNeeded()
+            updateRadarMonitoring()
         }
     }
 
     private fun syncBleAssignments() {
         magicshineController.assignedDeviceIds = engine.settings.lightAssignments
-            .filter { it.protocol == LightProtocol.BLE }
+            .filter { it.enabled && it.protocol == LightProtocol.BLE }
             .map { it.deviceId }
             .toSet()
     }
@@ -252,21 +320,18 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
         extensionScope.launch {
             lightControllers[assignment.protocol]?.setMode(deviceId, modeName)
-            kotlinx.coroutines.delay(3000)
-            // In settings UI, always revert to real OFF, not the configured OFF-mode
+            delay(3000)
             lightControllers[assignment.protocol]?.setMode(deviceId, "OFF")
         }
     }
 
     fun onAssignmentChanged() {
         syncBleAssignments()
-        // Connect newly assigned BLE lights
         for (id in magicshineController.assignedDeviceIds) {
             magicshineController.connect(id)
         }
         startBleIfNeeded()
         updateRadarMonitoring()
-        // Ensure new assignments are also turned OFF while in settings
         if (settingsUiActive) {
             for (assignment in engine.settings.lightAssignments) {
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
@@ -282,21 +347,20 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             startDiscoveryPolling()
             startBleIfNeeded()
             startDisplayRotation()
-            // Turn everything truly OFF for configuration session
             extensionScope.launch {
-                // Small delay to ensure binders are ready
-                kotlinx.coroutines.delay(500)
+                delay(500)
                 for (assignment in engine.settings.lightAssignments) {
                     lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
                 }
             }
         } else {
+            stopRadarMonitoring()
+            stopRadarSimulation()
             if (!rideActive) {
                 stopDiscoveryPolling()
                 stopDisplayRotation()
                 lightControl.unbind()
             } else {
-                // Restore ride state when leaving settings
                 engine.onApplyState?.invoke(engine.activeState.value)
             }
             stopBleIfNotNeeded()
@@ -317,7 +381,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     Timber.d("$TAG: All assigned lights connected, stopping discovery polling")
                     break
                 }
-                kotlinx.coroutines.delay(10_000)
+                delay(10_000)
             }
             discoveryPollingJob = null
         }
@@ -329,28 +393,18 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.protocol == LightProtocol.BLE }
+        engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.BLE }
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
         if (settingsUiActive || hasBleAssignments()) {
             bleStartJob?.cancel()
             bleStartJob = extensionScope.launch {
-                kotlinx.coroutines.delay(2000)
-                // Always hold Bluetooth while a BLE light is assigned so the supervisor can
-                // reconnect a known light without a scan. Only run the scanner when a light
-                // still needs discovering (or the settings UI is open), otherwise it would
-                // scan for the whole ride even though everything is already connected.
+                delay(2000)
                 karooSystem.dispatch(RequestBluetooth(extension))
-                // Assigned lights connect directly by their bonded address. This works even
-                // when the light is on but idle and no longer advertising (Magicshine stops
-                // advertising when idle), which scan-based discovery cannot handle — and it
-                // needs no scanner, so there is no scan battery cost during a ride.
                 for (id in magicshineController.assignedDeviceIds) {
                     magicshineController.connect(id)
                 }
-                // The scanner is only needed to discover NEW, not-yet-assigned lights, so run
-                // it only while the settings UI is open — never for a whole ride.
                 if (settingsUiActive) {
                     Timber.d("$TAG: Starting BLE discovery")
                     magicshineController.startDiscovery()
@@ -382,8 +436,6 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     else -> if (name != null) 100 else null
                 }
 
-                // 1. Collect all batteries from enabled devices that are NOT lights (type 35)
-                // This captures Radar (Type 16) or other sensors sharing the same serial suffix
                 val otherBatteriesBySuffix = savedDevices.devices.filter { device ->
                     val parts = device.id.split("-")
                     device.enabled && (parts.size < 2 || parts[1].toIntOrNull() != DEVICE_TYPE_BIKE_LIGHT)
@@ -403,7 +455,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     val directBattery = translateBattery(device.details?.lastBattery?.name)
                     var batteryPercent = directBattery
                     var fromRadar = false
-                    
+
                     if (batteryPercent == null) {
                         val suffix = device.id.split("-").last()
                         val radarBattery = otherBatteriesBySuffix[suffix]
@@ -429,39 +481,34 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         val name: String,
         val manufacturer: String?,
         val batteryPercent: Int?,
-        val batteryFromRadar: Boolean = false
+        val batteryFromRadar: Boolean = false,
     )
     private var antDeviceCache = listOf<AntDeviceInfo>()
 
     private fun updateAntLights() {
         _antLights.value = antDeviceCache.map { device ->
             val assignment = engine.settings.lightAssignments.find { it.deviceId == device.id }
-            // Only allow radar battery fallback for REAR lights
             val useRadarBattery = assignment?.role == LightRole.REAR
-            
+
             DiscoveredLight(
                 id = device.id,
                 name = device.name,
                 manufacturer = device.manufacturer,
                 connected = lightControl.connectionStates.value[device.id] == "CONNECTED",
                 batteryPercent = if (device.batteryFromRadar && !useRadarBattery) null else device.batteryPercent,
-                batteryFromRadar = device.batteryFromRadar && useRadarBattery
+                batteryFromRadar = device.batteryFromRadar && useRadarBattery,
             )
         }
     }
 
     private fun buildModeDetail(state: Int): String {
         if (state == 0) return "Lights Off"
-        return engine.settings.lightAssignments.joinToString("\n") {
-            val roleLabel = when (it.role) {
-                LightRole.FRONT -> "F"
-                LightRole.REAR -> "R"
-            }
+        return engine.settings.lightAssignments.filter { it.enabled }.joinToString("\n") {
             val modeId = it.modeForState(state)
             val displayName = modeProviderFor(it.protocol, it.deviceId)
                 .availableModes()
                 .find { m -> m.id == modeId }?.displayName ?: modeId
-            "$roleLabel: $displayName"
+            "${it.displayName}: $displayName"
         }
     }
 
@@ -492,8 +539,248 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun updateRadarMonitoring() {
-        val needsRadar = engine.settings.lightAssignments.any { it.radarWarnFlash }
-        if (needsRadar) startRadarMonitoring() else stopRadarMonitoring()
+        val needsRadar = engine.settings.softwareThreatModeEnabled && engine.settings.lightAssignments.any { it.enabled && it.isThreatModeEnabled && it.protocol == LightProtocol.ANT_PLUS }
+        val simulate = engine.settings.softwareThreatModeEnabled && engine.settings.simulateRadar
+
+        if (simulate) {
+            stopRadarMonitoring()
+            if (rideActive) {
+                startRadarSimulation()
+            } else {
+                stopRadarSimulation()
+            }
+        } else {
+            stopRadarSimulation()
+            if (needsRadar) startRadarMonitoring() else stopRadarMonitoring()
+        }
+    }
+
+    private fun startRadarSimulation() {
+        if (radarSimulationJob != null) return
+        Timber.d("$TAG: Starting action-packed FIT-based stress test radar simulation loop")
+        radarSimulationJob = extensionScope.launch {
+            while (isActive && rideActive) {
+                // 1. Initial Start Check (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(8000L)
+                if (!isActive) break
+
+                // STRESS PHASE A
+                // 2. Real FIT Event 1: 1 Car @ 32 km/h (Level 1 Yellow) (12s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 1,
+                        simThreatLevel = 1,
+                    ),
+                )
+                onRadarThreatLevel(1)
+                delay(12000L)
+                if (!isActive) break
+
+                // 3. Fast Platoon: 3 Cars @ 50 km/h (Level 2 Red) (5s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 3,
+                        simThreatLevel = 2,
+                    ),
+                )
+                onRadarThreatLevel(2)
+                delay(5000L)
+                if (!isActive) break
+
+                // 4. 1-Second Blitz Gap! (1s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(1000L)
+                if (!isActive) break
+
+                // 5. Tailgater: 2 Cars (Level 2 Red) (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 2,
+                        simThreatLevel = 2,
+                    ),
+                )
+                onRadarThreatLevel(2)
+                delay(8000L)
+                if (!isActive) break
+
+                // 6. Mini Pause (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(8000L)
+                if (!isActive) break
+
+                // STRESS PHASE B
+                // 7. Slow Car (1 Car @ Level 1 Yellow) (6s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 1,
+                        simThreatLevel = 1,
+                    ),
+                )
+                onRadarThreatLevel(1)
+                delay(6000L)
+                if (!isActive) break
+
+                // 8. Overtaking Sports Car (3 Cars @ Level 2 Red) (7s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 3,
+                        simThreatLevel = 2,
+                    ),
+                )
+                onRadarThreatLevel(2)
+                delay(7000L)
+                if (!isActive) break
+
+                // 9. 1-Second Blitz Gap! (1s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(1000L)
+                if (!isActive) break
+
+                // 10. Second Tailgater (2 Cars @ Level 2 Red) (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 2,
+                        simThreatLevel = 2,
+                    ),
+                )
+                onRadarThreatLevel(2)
+                delay(8000L)
+                if (!isActive) break
+
+                // 11. Mini Pause (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(8000L)
+                if (!isActive) break
+
+                // STRESS PHASE C (Rush Hour Cascade)
+                // 12. City Traffic Car 1 (1 Car @ Level 1 Yellow) (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 1,
+                        simThreatLevel = 1,
+                    ),
+                )
+                onRadarThreatLevel(1)
+                delay(8000L)
+                if (!isActive) break
+
+                // 13. 1-Second Blitz Gap! (1s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(1000L)
+                if (!isActive) break
+
+                // 14. Overtake Double (3 Cars @ Level 2 Red) (9s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 3,
+                        simThreatLevel = 2,
+                    ),
+                )
+                onRadarThreatLevel(2)
+                delay(9000L)
+                if (!isActive) break
+
+                // 15. 1-Second Blitz Gap! (1s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(1000L)
+                if (!isActive) break
+
+                // 16. Dense Platoon (2 Cars @ Level 1 Yellow) (9s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 2,
+                        simThreatLevel = 1,
+                    ),
+                )
+                onRadarThreatLevel(1)
+                delay(9000L)
+                if (!isActive) break
+
+                // 17. Final Clear Check (8s)
+                engine.updateDisplayInfo(
+                    engine.displayInfo.value.copy(
+                        isSimulatedRadar = true,
+                        simVehicleCount = 0,
+                        simThreatLevel = 0,
+                    ),
+                )
+                onRadarThreatLevel(0)
+                delay(8000L)
+            }
+        }
+    }
+
+    private fun stopRadarSimulation() {
+        radarSimulationJob?.cancel()
+        radarSimulationJob = null
+        if (engine.displayInfo.value.isSimulatedRadar) {
+            engine.updateDisplayInfo(
+                engine.displayInfo.value.copy(
+                    isSimulatedRadar = false,
+                    simVehicleCount = 0,
+                    simThreatLevel = 0,
+                ),
+            )
+        }
     }
 
     private fun startRadarMonitoring() {
@@ -505,38 +792,102 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             if (event.state is StreamState.Streaming) {
                 val values = (event.state as StreamState.Streaming).dataPoint.values
                 val threat = values[DataType.Field.RADAR_THREAT_LEVEL]?.toInt() ?: 0
-                onRadarThreat(threat > 0)
+                onRadarThreatLevel(threat)
             }
         }
     }
 
     private fun stopRadarMonitoring() {
+        threatHoldJob?.cancel()
+        threatHoldJob = null
         radarConsumerId?.let {
             Timber.d("$TAG: Stopping radar monitoring")
             karooSystem.removeConsumer(it)
         }
         radarConsumerId = null
-        radarThreatActive = false
+        isRadarThreatActive = false
+        lastThreatLevel = 0
+        engine.updateDisplayInfo(engine.displayInfo.value)
     }
 
-    private fun onRadarThreat(threatDetected: Boolean) {
-        if (threatDetected == radarThreatActive) return
-        radarThreatActive = threatDetected
-        Timber.d("$TAG: Radar threat=${if (threatDetected) "DETECTED" else "CLEAR"}")
+    private fun onRadarThreatLevel(threatLevel: Int) {
+        val now = System.currentTimeMillis()
+        val threatDetected = threatLevel > 0
 
-        for (assignment in engine.settings.lightAssignments) {
-            if (!assignment.radarWarnFlash) continue
-            val state = engine.activeState.value
-            if (state != 0) continue
+        // Rate-limiting / Throttling guard: ignore redundant radar callbacks firing faster than 100ms apart
+        if (now - lastRadarEventTimestamp < 100L && lastThreatLevel == threatLevel && isRadarThreatActive == threatDetected) {
+            return
+        }
+        lastRadarEventTimestamp = now
 
-            val modeName = if (threatDetected) "FAST_FLASH" else assignment.modeOff
-            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
+        threatHoldJob?.cancel()
+
+        if (threatDetected) {
+            val previousThreatLevel = lastThreatLevel
+            isRadarThreatActive = true
+            lastThreatLevel = threatLevel
+            Timber.d("$TAG: Software threat ACTIVE level=$threatLevel (previous=$previousThreatLevel)")
+            engine.updateDisplayInfo(engine.displayInfo.value)
+
+            // If the exact same threat level is already active, skip re-transmitting duplicate command
+            if (previousThreatLevel == threatLevel && isRadarThreatActive) {
+                Timber.d("$TAG: Threat level $threatLevel already active; skipping duplicate ANT+ transmission.")
+                return
+            }
+
+            for (assignment in engine.settings.lightAssignments) {
+                if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
+
+                val activeState = engine.activeState.value
+                val overrideActive = engine.settings.overrideActiveModes
+
+                if (previousThreatLevel == 0 && activeState != 0 && !overrideActive) continue
+
+                val targetMode = assignment.softwareThreatMode
+                if (targetMode != "DISABLED") {
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
+                }
+            }
+        } else {
+            // Guard check: If already clear, do not launch duplicate clear jobs every 250ms from radar stream spam
+            if (!isRadarThreatActive && threatHoldJob == null) {
+                return
+            }
+            if (!isRadarThreatActive) {
+                return
+            }
+
+            isRadarThreatActive = false
+            threatHoldJob?.cancel()
+            val holdSeconds = engine.settings.threatHoldTimeSeconds.coerceAtMost(3)
+            threatHoldJob = extensionScope.launch {
+                if (holdSeconds > 0) {
+                    delay(holdSeconds * 1000L)
+                }
+                // Guard check: If a new threat arrived while delay was completing, do NOT clear or restore!
+                if (isRadarThreatActive) {
+                    Timber.d("$TAG: New threat arrived during hold time delay; aborting restore command.")
+                    return@launch
+                }
+                lastThreatLevel = 0
+                threatHoldJob = null
+                Timber.d("$TAG: Software threat CLEAR (after hold time)")
+                engine.updateDisplayInfo(engine.displayInfo.value)
+
+                for (assignment in engine.settings.lightAssignments) {
+                    if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
+                    val activeState = engine.activeState.value
+                    val restoreMode = assignment.modeForState(activeState)
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, restoreMode)
+                }
+            }
         }
     }
 
     override fun onDestroy() {
         Timber.d("$TAG: Extension onDestroy")
         instance = null
+        stopRadarSimulation()
         stopRadarMonitoring()
         engine.destroy()
         magicshineController.destroy()

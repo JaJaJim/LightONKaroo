@@ -1,12 +1,10 @@
 package io.github.JaJaJim.lightonkaroo.data
 
+import io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension
 import io.github.JaJaJim.lightonkaroo.ant.LightMode
+import io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceConfig
+import io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceModeProvider
 import kotlinx.serialization.Serializable
-
-enum class DayTimeZone {
-    DAY,
-    NIGHT,
-}
 
 @Serializable
 enum class LightRole { FRONT, REAR }
@@ -18,14 +16,24 @@ enum class LightProtocol { ANT_PLUS, BLE }
 data class LightAssignment(
     val deviceId: String,
     val deviceName: String,
-    val role: LightRole,
+    val role: LightRole = LightRole.REAR,
     val protocol: LightProtocol = LightProtocol.ANT_PLUS,
+    val enabled: Boolean = true,
+    val useForThreatMode: Boolean = false,
     val activeMode: String = "OFF",
     val secondaryMode: String = "OFF",
     val modeOff: String = "OFF",
-    val radarWarnFlash: Boolean = false,
+    val softwareThreatMode: String = "FAST_FLASH",
+    val threatModeYellow: String = "FAST_FLASH",
+    val threatModeRed: String = "FAST_FLASH",
     val nickname: String = "",
 ) {
+    val isThreatModeEnabled: Boolean
+        get() = enabled && useForThreatMode
+
+    val threatMode: String
+        get() = if (useForThreatMode) softwareThreatMode else "DISABLED"
+
     fun modeForState(state: Int): String = when (state) {
         1 -> activeMode
         2 -> secondaryMode
@@ -63,21 +71,21 @@ class DynamicAntPlusModeProvider(private val karooNames: Set<String>) : LightMod
 fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightModeProvider = when (protocol) {
     LightProtocol.ANT_PLUS -> {
         val supported = deviceId?.let {
-            io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+            KarooLightControllerExtension.getInstance()
                 ?.lightControl?.supportedModes?.value?.get(it)
         }
         if (supported != null) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
     }
     LightProtocol.BLE -> {
         val config = deviceId?.let {
-            io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+            KarooLightControllerExtension.getInstance()
                 ?.magicshineController?.getDeviceConfig(it)
         }
         if (config != null) {
-            io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceModeProvider(config)
+            MagicshineDeviceModeProvider(config)
         } else {
-            io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceModeProvider(
-                io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceConfig.forDevice("M1"),
+            MagicshineDeviceModeProvider(
+                MagicshineDeviceConfig.forDevice("M1"),
             )
         }
     }
@@ -93,6 +101,10 @@ data class LightControllerSettings(
     val rotationSpeedSeconds: Int = 5,
     val showLogo: Boolean = true,
     val glowIntensity: Int = 3,
+    val threatHoldTimeSeconds: Int = 3,
+    val overrideActiveModes: Boolean = false,
+    val simulateRadar: Boolean = false,
+    val softwareThreatModeEnabled: Boolean = false,
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {

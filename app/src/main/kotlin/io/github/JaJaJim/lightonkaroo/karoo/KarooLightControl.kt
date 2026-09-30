@@ -11,10 +11,19 @@ import android.os.IInterface
 import android.os.Parcel
 import android.os.Parcelable
 import io.github.JaJaJim.lightonkaroo.light.LightController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
+import java.util.concurrent.Executors
 
 class KarooLightControl(private val context: Context) : LightController {
 
@@ -24,10 +33,7 @@ class KarooLightControl(private val context: Context) : LightController {
         private const val LIGHT_CMD_DESCRIPTOR = "io.hammerhead.sensorservice.LightCommandConnectionAIDL"
         private const val LISTENER_DESCRIPTOR = "io.hammerhead.aidlrx.IParcelableListener"
         private const val TX_REGISTER_LIGHT_PARAMS = 1
-        private const val TX_UNREGISTER_LIGHT_PARAMS = 2
         private const val TX_SET_LIGHT_MODE = 3
-        private const val TX_REGISTER_DEVICE_CONNECTION = 6
-        private const val TX_UNREGISTER_DEVICE_CONNECTION = 7
         private const val TX_GET_LIGHT_CMD = 17
     }
 
@@ -45,14 +51,35 @@ class KarooLightControl(private val context: Context) : LightController {
     private val _actualModes = MutableStateFlow<Map<String, String>>(emptyMap())
     val actualModes: StateFlow<Map<String, String>> = _actualModes
     private var lightModeEnumClass: Class<out Enum<*>>? = null
-    private val registeredListeners = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val pendingRegistrations = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val pendingLightParamRegistrations = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val registeredListeners = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val pendingRegistrations = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val pendingLightParamRegistrations = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     var onServiceReady: (() -> Unit)? = null
 
-    // Serializes SensorService binder work off the main thread — ServiceConnection
-    // callbacks arrive on the main thread, and these transactions can block.
-    private val serviceExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    // Sequential command queue to prevent IPC binder swamp and ANT+ packet collisions
+    private data class QueuedCommand(val deviceId: String, val modeName: String)
+    private val commandChannel = Channel<QueuedCommand>(Channel.UNLIMITED)
+    private val queueScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        queueScope.launch {
+            for (cmd in commandChannel) {
+                try {
+                    val currentActual = _actualModes.value[cmd.deviceId]
+                    if (currentActual == cmd.modeName) {
+                        Timber.d("$TAG: Light ${cmd.deviceId} already in mode ${cmd.modeName}, skipping redundant command")
+                        continue
+                    }
+                    executeSetLightMode(cmd.deviceId, cmd.modeName)
+                    delay(250L)
+                } catch (e: Exception) {
+                    Timber.e(e, "$TAG: Error executing queued light command")
+                }
+            }
+        }
+    }
+
+    private val serviceExecutor = Executors.newSingleThreadExecutor()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -119,8 +146,8 @@ class KarooLightControl(private val context: Context) : LightController {
                 "kotlin.jvm.internal.DefaultConstructorMarker",
             )
             val deviceConstructor = deviceClass.constructors.find { c ->
-                c.parameterTypes.lastOrNull() == defaultMarkerClass &&
-                    c.parameterTypes[c.parameterTypes.size - 2] == Int::class.javaPrimitiveType
+                (c.parameterTypes.lastOrNull() == defaultMarkerClass) &&
+                    (c.parameterTypes[c.parameterTypes.size - 2] == Int::class.javaPrimitiveType)
             }
             if (deviceConstructor != null) {
                 Timber.d("$TAG: Device constructor: ${deviceConstructor.parameterTypes.map { it.simpleName }}")
@@ -156,7 +183,6 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    /** Binds to Karoo's SensorService to claim the light-command session. Idempotent. */
     fun bind() {
         if (bindRequested) return
         val intent = Intent().apply {
@@ -174,16 +200,8 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    /**
-     * Releases the light-command session so Karoo's own light control regains it.
-     * Unbinding drops our SensorService connection, which releases the light-command
-     * binder and our listener registrations on the service side.
-     */
     fun unbind() {
         if (!bindRequested) return
-        // Unbinding drops our SensorService connection, which releases the light-command
-        // binder and our listener registrations service-side — no synchronous unregister
-        // transactions needed (those would block the caller, often the main thread).
         try { context.unbindService(serviceConnection) } catch (_: Exception) {}
         bindRequested = false
         isBound = false
@@ -195,7 +213,7 @@ class KarooLightControl(private val context: Context) : LightController {
         Timber.d("$TAG: Released SensorService light control")
     }
 
-    fun setLightMode(deviceId: String, modeName: String): Boolean {
+    private fun executeSetLightMode(deviceId: String, modeName: String): Boolean {
         val binder = lightCmdBinder ?: run {
             Timber.w("$TAG: LightCommand binder not available")
             return false
@@ -232,10 +250,10 @@ class KarooLightControl(private val context: Context) : LightController {
 
             binder.transact(TX_SET_LIGHT_MODE, data, reply, 0)
             reply.readException()
-            Timber.d("$TAG: setLightMode($deviceId, $modeName) OK")
+            Timber.d("$TAG: executeSetLightMode($deviceId, $modeName) OK")
             return true
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: setLightMode($deviceId, $modeName) failed")
+            Timber.e(e, "$TAG: executeSetLightMode($deviceId, $modeName) failed")
             return false
         } finally {
             data.recycle()
@@ -244,7 +262,7 @@ class KarooLightControl(private val context: Context) : LightController {
     }
 
     override fun setMode(deviceId: String, modeName: String) {
-        setLightMode(deviceId, modeName)
+        commandChannel.trySend(QueuedCommand(deviceId, modeName))
     }
 
     fun registerForLightParameters(deviceId: String) {
@@ -258,8 +276,6 @@ class KarooLightControl(private val context: Context) : LightController {
         val listenerId = "light-params-$deviceId"
         if (listenerId in registeredListeners) return
 
-        val enumClass = lightModeEnumClass
-
         val iface = IInterface { null }
         val listenerBinder = object : Binder() {
             init { attachInterface(iface, LISTENER_DESCRIPTOR) }
@@ -271,8 +287,8 @@ class KarooLightControl(private val context: Context) : LightController {
                         data.readString()
                         val bytes = data.createByteArray()
                         data.readInt()
-                        if (bytes != null && enumClass != null) {
-                            parseLightParameters(deviceId, bytes, enumClass)
+                        if (bytes != null) {
+                            parseLightParameters(deviceId, bytes)
                         }
                         reply?.writeNoException()
                     }
@@ -304,22 +320,18 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    private fun parseLightParameters(deviceId: String, bytes: ByteArray, enumClass: Class<out Enum<*>>) {
+    private fun parseLightParameters(deviceId: String, bytes: ByteArray) {
         try {
             val parcel = Parcel.obtain()
             try {
                 parcel.unmarshall(bytes, 0, bytes.size)
                 parcel.setDataPosition(0)
 
-                // LightParameters parcel layout:
-                // 1. mode: LightMode written as name string
-                // 2. location: written as name string
-                // 3. supportedModes: size int + each mode as name string
                 val modeName = parcel.readString()
                 val locationName = parcel.readString()
                 val modesCount = parcel.readInt()
                 val modes = mutableSetOf<String>()
-                for (i in 0 until modesCount) {
+                repeat(modesCount) {
                     val name = parcel.readString()
                     if (name != null && name != "UNKNOWN") {
                         modes.add(name)
@@ -333,7 +345,6 @@ class KarooLightControl(private val context: Context) : LightController {
                         Timber.d("$TAG: LightParameters for $deviceId: mode=$modeName, location=$locationName, supportedModes=$modes")
                         _supportedModes.update { it + (deviceId to modes) }
                     }
-                    // Capture the actual mode reported by the device
                     if (modeName != null) {
                         _actualModes.update { it + (deviceId to modeName) }
                     }
@@ -373,8 +384,7 @@ class KarooLightControl(private val context: Context) : LightController {
                             try {
                                 parcel.unmarshall(bytes, 0, bytes.size)
                                 parcel.setDataPosition(0)
-                                val stateOrdinal = parcel.readInt()
-                                val stateName = when (stateOrdinal) {
+                                val stateName = when (parcel.readInt()) {
                                     0 -> "CONNECTED"
                                     1 -> "SEARCHING"
                                     2 -> "DISABLED"
@@ -417,27 +427,4 @@ class KarooLightControl(private val context: Context) : LightController {
             callReply.recycle()
         }
     }
-
-    fun unregisterConnectionState(deviceId: String) {
-        val binder = sensorBinder ?: return
-        val listenerId = if (deviceId.startsWith("light-conn-")) deviceId else "light-conn-$deviceId"
-        if (listenerId !in registeredListeners) return
-
-        val data = Parcel.obtain()
-        val reply = Parcel.obtain()
-        try {
-            data.writeInterfaceToken(SENSOR_DESCRIPTOR)
-            data.writeString(listenerId)
-            binder.transact(7, data, reply, 0)
-            reply.readException()
-            registeredListeners.remove(listenerId)
-        } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to unregister connection state for $listenerId")
-        } finally {
-            data.recycle()
-            reply.recycle()
-        }
-    }
-
-    fun isConnected(): Boolean = lightCmdBinder != null
 }

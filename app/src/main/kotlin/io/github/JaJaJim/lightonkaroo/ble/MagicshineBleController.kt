@@ -82,10 +82,21 @@ class MagicshineBleController(context: Context) : LightController {
         val callback = object : android.bluetooth.le.ScanCallback() {
             override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                 try {
-                    val name = result.scanRecord?.deviceName ?: return
+                    val name = result.scanRecord?.deviceName ?: result.device?.name ?: return
                     val address = result.device?.address ?: return
                     if (devices.containsKey(address)) return
-                    if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
+                    val nameUpper = name.uppercase()
+                    val isMagicshine = nameUpper.contains("MAGICSHINE") ||
+                                       nameUpper.contains("M1") ||
+                                       nameUpper.contains("M2") ||
+                                       nameUpper.contains("M3") ||
+                                       nameUpper.contains("HORI") ||
+                                       nameUpper.contains("EVO") ||
+                                       nameUpper.contains("CBL") ||
+                                       nameUpper.contains("RAY") ||
+                                       nameUpper.contains("SEEMEE") ||
+                                       nameUpper.contains("MONTEER")
+                    if (isMagicshine) {
                         Timber.d("$TAG: Found Magicshine: $name ($address)")
                         scope.launch { registerFoundDevice(address, name) }
                     }
@@ -172,11 +183,9 @@ class MagicshineBleController(context: Context) : LightController {
             ?: return false
         // Connecting by address without a prior scan: make sure we have a device entry and a
         // command config derived from the (bonded) name, so setMode works afterwards.
-        val name = devices[address]?.name ?: peripheral.name
-        if (name != null) {
-            devices.putIfAbsent(address, BleDevice(peripheral, name))
-            deviceConfigs.putIfAbsent(address, MagicshineDeviceConfig.forDevice(name))
-        }
+        val name = devices[address]?.name ?: peripheral.name ?: "Magicshine"
+        devices.putIfAbsent(address, BleDevice(peripheral, name))
+        deviceConfigs.putIfAbsent(address, MagicshineDeviceConfig.forDevice(name))
         return try {
             Timber.d("$TAG: Connecting to $address")
             val options = CentralManager.ConnectionOptions.Direct(

@@ -4,8 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,16 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -33,20 +30,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.JaJaJim.lightonkaroo.BuildConfig
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.R
 import io.github.JaJaJim.lightonkaroo.data.LightAssignment
 import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
+import io.github.JaJaJim.lightonkaroo.data.LightModeOption
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
-import io.github.JaJaJim.lightonkaroo.data.LightRole
 import io.github.JaJaJim.lightonkaroo.data.modeProviderFor
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -65,6 +67,10 @@ fun SettingsScreen(
     var rotationSpeed by remember(settings) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
     var showLogo by remember(settings) { mutableStateOf(settings.showLogo) }
     var glowIntensity by remember(settings) { mutableStateOf(settings.glowIntensity.toFloat()) }
+    var threatHoldTime by remember(settings) { mutableStateOf(settings.threatHoldTimeSeconds.toFloat()) }
+    var overrideActiveModes by remember(settings) { mutableStateOf(settings.overrideActiveModes) }
+    var simulateRadar by remember(settings) { mutableStateOf(settings.simulateRadar) }
+    var softwareThreatModeEnabled by remember(settings) { mutableStateOf(settings.softwareThreatModeEnabled) }
 
     fun saveSettings() {
         onSave(
@@ -76,7 +82,11 @@ fun SettingsScreen(
                 threeModeEnabled = threeModeEnabled,
                 rotationSpeedSeconds = rotationSpeed.toInt(),
                 showLogo = showLogo,
-                glowIntensity = glowIntensity.toInt()
+                glowIntensity = glowIntensity.toInt(),
+                threatHoldTimeSeconds = threatHoldTime.toInt(),
+                overrideActiveModes = overrideActiveModes,
+                simulateRadar = simulateRadar,
+                softwareThreatModeEnabled = softwareThreatModeEnabled,
             ),
         )
     }
@@ -105,7 +115,36 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Prominent Important Setup Notice at the Very Top
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                .padding(12.dp),
+        ) {
+            Text(
+                "💡 IMPORTANT",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Karoo Sensor Setup",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "In Karoo Sensor Settings, set Auto Light Control to 'OFF' so Karoo OS does not conflict with LightONKaroo over ANT+.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Connected Lights
         Text("Connected Lights", style = MaterialTheme.typography.titleSmall)
@@ -171,9 +210,9 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Enable 3-mode control (Janus Mode)")
+                Text("Enable Janus Mode (3-Way Control)")
                 Text(
-                    "Split field: Left toggles Primary/Secondary, Right turns OFF.",
+                    "When ON: Left tap toggles Primary/Secondary Light Mode, Right tap turns OFF. When OFF (Classic Mode): Full tap toggles Primary ON and OFF.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -182,6 +221,216 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Software Threat Mode Master Switch Section
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Enable Software Threat Mode", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Triggers warning lighting when radar detects approaching vehicles. Choose Steady Light for StVZO / DACH compliance.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = softwareThreatModeEnabled,
+                onCheckedChange = {
+                    softwareThreatModeEnabled = it
+                    saveSettings()
+                },
+            )
+        }
+
+        if (softwareThreatModeEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "⚠️ WARNING: Relies on wireless ANT+ streaming (~1s wake latency) and third-party device firmware. Subject to radio interference, packet loss, and potential software bugs in LightONKaroo or connected devices. Provided \"AS-IS\" without warranty of any kind. Not guaranteed to be error-free or safety-critical. Use entirely at your own risk.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Radar Status Legend (Text Only)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "Radar Status Icon Indicator",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "• White: Waiting for vehicle or light confirmation\n• Turquoise: Vehicle detected & light mode matches threat configuration",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Override Active ON Modes")
+                    Text(
+                        "Threat mode ALWAYS activates assigned threat lights when OFF. Enable this to ALSO temporarily override active ON lights (Primary/Secondary).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = overrideActiveModes,
+                    onCheckedChange = {
+                        overrideActiveModes = it
+                        saveSettings()
+                    },
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Simulate Radar Threats (Testing)")
+                    Text(
+                        "Generates artificial vehicle approach events based on real radar data for indoor testing without a physical radar sensor.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = simulateRadar,
+                    onCheckedChange = {
+                        simulateRadar = it
+                        saveSettings()
+                    },
+                )
+            }
+
+            if (simulateRadar) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                ) {
+                    Text(
+                        "🚨 RADAR SIMULATOR ACTIVE",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Real radar inputs are disabled. Generating realistic vehicle approach events for indoor testing. Turn OFF before riding outdoors!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Column {
+                Text(
+                    "Threat Hold Time: ${threatHoldTime.toInt()}s",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = threatHoldTime,
+                    onValueChange = { threatHoldTime = it },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = 0f..5f,
+                    steps = 4, // 0, 1, 2, 3, 4, 5
+                )
+            }
+
+            val threatLights = settings.lightAssignments.filter { it.enabled && it.useForThreatMode && it.protocol == LightProtocol.ANT_PLUS }
+            if (threatLights.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                ) {
+                    Text(
+                        "⚠️ CONFIGURATION WARNING",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Software Threat Mode is enabled, but no connected lights are configured for threat mode. Please enable 'Use for Software Threat Mode' on at least one ANT+ light in Connected Lights.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            } else {
+                threatLights.forEach { assignment ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val modes = modeProviderFor(assignment.protocol, assignment.deviceId).availableModes()
+                    val threatOptions = buildList {
+                        add(LightModeOption("DISABLED", "Disabled"))
+                        add(LightModeOption("FAST_FLASH", "Fast Flash"))
+                        modes.forEach { mode ->
+                            if (mode.id != "OFF" && mode.id != "FAST_FLASH") {
+                                add(mode)
+                            }
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThreatModeRow(
+                            displayName = assignment.displayName,
+                            selectedMode = assignment.softwareThreatMode,
+                            modes = threatOptions,
+                            onSelected = { newMode ->
+                                val updatedAssignments = settings.lightAssignments.map {
+                                    if (it.deviceId == assignment.deviceId) it.copy(softwareThreatMode = newMode) else it
+                                }
+                                onSave(settings.copy(lightAssignments = updatedAssignments))
+                            },
+                            onTest = {
+                                onTestMode(assignment.deviceId, assignment.softwareThreatMode)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -194,7 +443,7 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Auto-on when starting ride", modifier = Modifier.weight(1f))
+            Text("Turn ON in Primary mode on ride start", modifier = Modifier.weight(1f))
             Switch(checked = autoOn, onCheckedChange = { autoOn = it; saveSettings() })
         }
 
@@ -205,7 +454,14 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Turn off lights after finishing ride", modifier = Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Truly turn OFF lights on ride end")
+                Text(
+                    "Sends a hardware OFF command to fully power down lights and save battery when ride ends.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Switch(checked = autoOff, onCheckedChange = { autoOff = it; saveSettings() })
         }
 
@@ -224,9 +480,9 @@ fun SettingsScreen(
                     "OFF" to "Configured OFF Mode",
                     "PRIMARY" to "Primary ON",
                     "SECONDARY" to "Secondary ON",
-                    "HARD_OFF" to "Truly turn OFF"
+                    "HARD_OFF" to "Truly turn OFF",
                 ),
-                onSelected = { pauseBehavior = it; saveSettings() }
+                onSelected = { pauseBehavior = it; saveSettings() },
             )
         }
 
@@ -240,7 +496,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text("Show status rotation in data field")
                 Text(
-                    "Cycle through name, status, and battery of connected lights.",
+                    "Cycles through light name, status, and battery level in the data field UI.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -253,14 +509,14 @@ fun SettingsScreen(
             Column {
                 Text(
                     "Rotation Speed: ${rotationSpeed.toInt()}s",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Slider(
                     value = rotationSpeed,
                     onValueChange = { rotationSpeed = it },
                     onValueChangeFinished = { saveSettings() },
                     valueRange = 5f..30f,
-                    steps = 4 // 5, 10, 15, 20, 25, 30
+                    steps = 4, // 5, 10, 15, 20, 25, 30
                 )
             }
         }
@@ -278,7 +534,7 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Show background logo")
+            Text("Show Janus Sun background logo", modifier = Modifier.weight(1f))
             Switch(checked = showLogo, onCheckedChange = { showLogo = it; saveSettings() })
         }
 
@@ -286,15 +542,15 @@ fun SettingsScreen(
 
         Column {
             Text(
-                "Background Glow Intensity: ${glowIntensity.toInt()}",
-                style = MaterialTheme.typography.bodyMedium
+                "Ambient Side-Glow Intensity: ${glowIntensity.toInt()}",
+                style = MaterialTheme.typography.bodyMedium,
             )
             Slider(
                 value = glowIntensity,
                 onValueChange = { glowIntensity = it },
                 onValueChangeFinished = { saveSettings() },
                 valueRange = 0f..5f,
-                steps = 4 // 0, 1, 2, 3, 4, 5
+                steps = 4, // 0, 1, 2, 3, 4, 5
             )
         }
 
@@ -303,7 +559,7 @@ fun SettingsScreen(
         Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            "ANT+: Supports smart bike lights like Garmin Varia, Bontrager Ion/Flare, Magene L508. Note: Some lights (e.g. Raveman) may report incorrect status or battery levels (possibly due to incomplete ANT+ implementations).\n\nBLE: Support for Magicshine (M1/M2/M3) is inherited but currently untested. Use at your own risk.",
+            "ANT+: Supports ANT+ smart bike lights. Tested with Magene AT1200, Magicshine Hori 1300Pro, Ravemen FR300 ANT+, Coospo TR70 and Cycplus L7 radar.\n\nBLE: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -314,81 +570,116 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
         )
     }
 }
 
 @Composable
-fun InlineDropdown(
-    label: String,
-    selectedId: String,
-    options: List<Pair<String, String>>,
+private fun ThreatModeRow(
+    displayName: String,
+    selectedMode: String,
+    modes: List<LightModeOption>,
     onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
+    onTest: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val displayName = options.find { it.first == selectedId }?.second ?: selectedId
-
-    Row(
-        modifier = modifier
-            .clickable { expanded = true }
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            "$label: ",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // Line 1: Light Name (e.g. "Radar Light") in primary color
         Text(
             displayName,
             style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { (id, name) ->
-                DropdownMenuItem(
-                    text = { Text(name) },
-                    onClick = { onSelected(id); expanded = false },
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun ProtocolBadge(protocol: LightProtocol) {
-    val badgeShape = RoundedCornerShape(4.dp)
-    when (protocol) {
-        LightProtocol.BLE -> {
-            Row(
-                modifier = Modifier
-                    .background(Color(0xFF1565C0), badgeShape)
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "BLE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    fontSize = 9.sp,
-                )
-            }
-        }
-        LightProtocol.ANT_PLUS -> {
+        // Line 2: Subtitle "Software Threat Mode"
+        Text(
+            "Software Threat Mode",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        // Line 3: Selected Mode + Controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            val currentOption = modes.find { it.id == selectedMode }
+            val modeName = currentOption?.displayName ?: selectedMode
+
             Text(
-                "ANT+",
-                modifier = Modifier
-                    .border(1.dp, Color(0xFF616161), badgeShape)
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF616161),
-                fontSize = 9.sp,
+                modeName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+
+            var expanded by remember { mutableStateOf(false) }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { expanded = true }) {
+                    Text("▼", style = MaterialTheme.typography.bodyMedium)
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    modes.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.displayName) },
+                            onClick = {
+                                expanded = false
+                                onSelected(mode.id)
+                            },
+                        )
+                    }
+                }
+
+                var countdownSeconds by remember { mutableStateOf(0) }
+                val scope = rememberCoroutineScope()
+
+                IconButton(
+                    onClick = {
+                        if (countdownSeconds == 0) {
+                            onTest()
+                            scope.launch {
+                                for (sec in 3 downTo 1) {
+                                    countdownSeconds = sec
+                                    delay(1000L)
+                                }
+                                countdownSeconds = 0
+                            }
+                        }
+                    },
+                    enabled = countdownSeconds == 0,
+                ) {
+                    if (countdownSeconds > 0) {
+                        Text(
+                            "${countdownSeconds}s",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    } else {
+                        Text(
+                            "▶",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -399,68 +690,90 @@ private fun LightRow(
     assignment: LightAssignment?,
     onClick: () -> Unit,
 ) {
-    val role = assignment?.role
-    val isConfigured = role != null
-    val alpha = if (light.connected || !isConfigured) 1f else 0.4f
-    val roleLabel = when (role) {
-        LightRole.FRONT -> "Front"
-        LightRole.REAR -> "Rear"
-        null -> "Tap to configure"
-    }
-    val statusColor = when {
-        !isConfigured -> MaterialTheme.colorScheme.tertiary
-        !light.connected -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.primary
-    }
-    val backgroundColor = when {
-        !isConfigured -> Color(0xFFFFE082)
-        !light.connected -> Color(0xFFE0E0E0)
-        else -> Color.Transparent
-    }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor, shape = MaterialTheme.shapes.small)
+            .border(
+                width = 1.dp,
+                color = if (light.connected) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(8.dp),
+            )
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f).alpha(alpha)) {
-            Text(light.name)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ProtocolBadge(light.protocol)
-                val infoText = listOfNotNull(
-                    light.manufacturer,
-                    if (!light.connected) "Disconnected" else null,
-                ).joinToString(" · ")
-                if (infoText.isNotEmpty()) {
-                    Text(
-                        infoText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        Column(horizontalAlignment = Alignment.End) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                roleLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = statusColor,
+                text = assignment?.displayName ?: light.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            if (isConfigured) {
-                val onMode = assignment.activeMode
-                val offMode = assignment.modeOff
-                Text(
-                    "$onMode / $offMode",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 8.sp
+            val protocolText = when (light.protocol) {
+                LightProtocol.ANT_PLUS -> "ANT+"
+                LightProtocol.BLE -> "BLE"
+            }
+            val statusText = if (light.connected) "Connected" else "Not found"
+            Text(
+                text = "$protocolText · $statusText",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        OutlinedButton(onClick = onClick) {
+            Text("Edit")
+        }
+    }
+}
+
+@Composable
+private fun InlineDropdown(
+    label: String,
+    selectedId: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val displayName = options.find { it.first == selectedId }?.second ?: selectedId
+            Text(
+                displayName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        var expanded by remember { mutableStateOf(false) }
+
+        IconButton(onClick = { expanded = true }) {
+            Text("▼", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { (id, name) ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = {
+                        expanded = false
+                        onSelected(id)
+                    },
                 )
             }
         }

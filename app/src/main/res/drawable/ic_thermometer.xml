@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Thermometer Bulb & Tube -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:fillColor="#FFFFFF"
+        android:pathData="M 12,16 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M 10.5,15 V 4.5 C 10.5,3.7 11.2,3 12,3 C 12.8,3 13.5,3.7 13.5,4.5 V 15" />
+    <!-- Ticks on the right -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M 16,5.5 H 18.5 M 16,8.5 H 18.5 M 16,11.5 H 18.5" />
+</vector>
