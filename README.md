@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.4 "Threat"
+# LightONKaroo v0.1.4-R2 "Threat"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
@@ -48,7 +48,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).
 
 ## 📝 Changelog
-### v0.1.4 "Threat"
+### v0.1.4-R2 "Threat"
 - **NEW**: **Software Threat Mode**: Automatic radar-triggered warning lighting for ANT+ radars.
 - **NEW**: **Interactive Radar Simulator**: Offline test loop simulating real FIT vehicle approach events for indoor testing.
 - **NEW**: **Physical Light Confirmation**: Radar status icon verifies live ANT+ mode feedback (Turquoise when confirmed, White when waiting).
