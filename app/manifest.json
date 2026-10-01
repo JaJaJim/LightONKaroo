@@ -2,10 +2,10 @@
   "label": "LightONKaroo",
   "packageName": "io.github.JaJaJim.lightonkaroo",
   "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
-  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.2-R2/LightONKaroo-v0.1.2-R2.apk",
-  "latestVersion": "0.1.2-R2",
-  "latestVersionCode": 14,
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.4-R2/LightONKaroo-v0.1.4-R2.apk",
+  "latestVersion": "0.1.4-R2",
+  "latestVersionCode": 20,
   "developer": "Peter Weber",
-  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3.",
-  "releaseNotes": "* Split-Field Control (Janus)\n* Secondary ON Mode selection\n* Custom nicknames for lights\n* Rotation speed slider\n* Battery icons and UI refinements"
+  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode.",
+  "releaseNotes": "* Software Threat Mode for radar-triggered warning lights\n* Interactive Radar Simulator for indoor desk testing\n* Physical light mode confirmation (Turquoise status icon)\n* Universal BLE auto-discovery and reconnection during rides\n* Sequential Command Queue and 150ms Debounce Guard"
 }
