@@ -16,19 +16,19 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 *If this is not done, the Karoo firmware and this extension will fight for control of the light.*
 
 ## 🚀 Features
+- **Software Threat Mode**:
+  - **Radar-Triggered Warning**: Automatically activates assigned warning lighting (e.g. Fast Flash) when compatible ANT+ bike radars detect approaching vehicles.
+  - **Physical Light Confirmation**: Radar status icon turns Turquoise only when participating threat lights successfully confirm their mode over ANT+.
+  - **Interactive Radar Simulator**: Offline test loop simulating real FIT vehicle approach events for indoor testing without a physical radar sensor.
+  - **Hold Time & Race-Protection**: Configurable hold time (0-5s) with race-condition guards to prevent flickering in dense traffic.
 - **Janus Split-Field Control**: 
   - **Left Tap**: Toggles between Primary and Secondary ON modes.
   - **Right Tap**: Turns lights OFF (or toggles in classic mode).
   - **Classic Mode**: Standard ON/OFF toggle available via settings.
-- **Software Threat Mode**:
-  - **Radar-Triggered Warning**: Automatically activates assigned warning lighting (e.g. Fast Flash) when Garmin Varia or ANT+ radar detects approaching vehicles.
-  - **Physical Light Confirmation**: Radar status icon turns Turquoise only when participating threat lights successfully confirm their mode over ANT+.
-  - **Interactive Radar Simulator**: Offline test loop simulating real FIT vehicle approach events for indoor testing without a physical radar sensor.
-  - **Hold Time & Race-Protection**: Configurable hold time (0-5s) with race-condition guards to prevent flickering in dense traffic.
 - **Customizable Modes**: Configure Primary ON, Secondary ON, and OFF states for each light.
-- **Custom Light Names**: Rename your lights (e.g., "Helmet Light") directly in the extension settings.
+- **Custom Light Names**: Rename your lights (e.g., "Helmet Light") directly in extension settings to replace cryptic default ANT+ device IDs in the data field.
 - **Intelligent Status UI**: 
-  - Top-left lamp indicator (Authentic Karoo Turquoise when ON, White when OFF).
+  - Top-left status dot: Turns Authentic Karoo Turquoise when all configured lights are online and connected, White when searching or offline.
   - Visual Battery Icons (Full/Half/Empty) with color-coded alerts.
   - Adjustable rotation speed (5 to 30 seconds).
   - **Radar Fallback**: For rear lights, automatically pulls battery data from the linked Radar sensor.
@@ -38,7 +38,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **Auto-Cleanup**: Truly turns off lights after finishing your ride to save power.
 - **Performance & Efficiency**:
   - **Sequential Command Queue**: Enforces a 250ms inter-command gap and duplicate suppression to prevent ANT+ radio packet collisions and Karoo binder overloads.
-  - **150ms Debounce Guard**: Filters out microscopic sensor jitter and boundary-reflection noise locally in memory.
+  - **150ms Smooth Filter**: Prevents light flickering caused by brief sensor noise or roadside reflections.
   - **Smart Diffing**: Skips redundant UI data field updates when status values remain stable.
   - **View-Aware**: Rotation only runs when the data field is visible on screen.
 
@@ -49,6 +49,9 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 📝 Changelog
 ### v0.1.4-R2 "Threat"
+- **NEW**: **Automatic Update Compatibility**: Enhanced versioning (`versionCode 20` and `-R2` release revision format) for seamless Karoo Extension Manager update detection.
+
+### v0.1.4 "Threat"
 - **NEW**: **Software Threat Mode**: Automatic radar-triggered warning lighting for ANT+ radars.
 - **NEW**: **Interactive Radar Simulator**: Offline test loop simulating real FIT vehicle approach events for indoor testing.
 - **NEW**: **Physical Light Confirmation**: Radar status icon verifies live ANT+ mode feedback (Turquoise when confirmed, White when waiting).
@@ -63,7 +66,6 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **UI**: Authentic Karoo colors (Turquoise #32e09a, Yellow #ffe714, Red #d34343).
 - **UI**: Improved battery icons (Full for Good, Half for Medium, Empty for Low).
 - **FIX**: Adjusted lamp icon position and font size for better small-field fit.
-- **FIX**: Resolved Auto-On bug where lights would sometimes start even if disabled.
 
 ### v0.1.2
 - **NEW**: Split-Field Control (Janus Mode). Left side toggles Primary/Secondary, Right side turns OFF.
