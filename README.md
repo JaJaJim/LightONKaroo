@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.4-R3 "mini"
+# LightONKaroo v0.1.4-R3 "Threat"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
@@ -49,7 +49,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).
 
 ## 📝 Changelog
-### v0.1.4-R3 "mini"
+### v0.1.4-R3 "Threat"
 - **UI MODERNIZATION**:
   - **In-Card Direct Light Configuration**: Removed popup dialogs. All light options (Display Name, Primary ON, Secondary ON, OFF Mode, and Software Threat Mode with test `▶` buttons) expand directly inside the light cards.
   - **Stable List Layout**: Light cards retain their exact position in the list when toggling active state ("in-place expansion").
@@ -61,8 +61,6 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **On-Demand Parameter Refresh**: Tapping the dropdown arrow `▼` on any mode row triggers an immediate AIDL refresh (`forceRefreshLightParameters`), retrieving live parameters from Karoo OS without background CPU/battery overhead.
 - **KAROO PROFILE EDITOR COMPATIBILITY**:
   - **Gesture Release in Profile Editor**: Click listeners (`setOnClickPendingIntent`) are now attached strictly during active ride recording (`isRideActive == true`). During Karoo Data Pages profile editing (`rideActive == false`), no click listeners intercept touch events, giving 100% native Karoo gesture compatibility (long-press drag & yellow highlight, double-tap edit/delete).
-- **HARDWARE FIX**:
-  - **M1_HARD_OFF for Magicshine / Hori 1300Pro**: Resolved 5% standby glow on M1 BLE devices by sending the channel-0 hardware power-off command (`M1_HARD_OFF`), completely powering down the LED driver when set to OFF.
 
 ### v0.1.4-R2 "Threat"
 - **NEW**: **Automatic Update Compatibility**: Enhanced versioning (`versionCode 20` and `-R2` release revision format) for seamless Karoo Extension Manager update detection.
@@ -100,6 +98,11 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - Added status rotation and color-coding.
 - **Improved SVG rendering** and centering for custom logo.
 - **Intelligent battery fallback**: Rear lights can now pull data from linked Radar.
+
+### v0.0.2
+- Initial fork and rebranding.
+- Integrated custom logo.
+- Simplified manual control logic.
 
 ## 📜 License
 Licensed under the **MIT License**.
