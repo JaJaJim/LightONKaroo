@@ -50,6 +50,7 @@ object MagicshineProtocol {
         return hexStringToBytes(hex)
     }
 
+    val M1_HARD_OFF = buildOffCommand(0)
     val MODULE2_OFF = hexStringToBytes("DE14A20101010100000000000000000000BB0DED")
 
     private fun buildFrame(type: Byte, status: Byte, content: ByteArray): ByteArray {
@@ -87,7 +88,7 @@ data class MagicshineDeviceConfig(
 ) {
     fun buildCommand(modeId: String): ByteArray? {
         if (modeId == "OFF") return when (moduleType) {
-            MagicshineModuleType.M1 -> MagicshineProtocol.buildOffCommand(1)
+            MagicshineModuleType.M1 -> MagicshineProtocol.M1_HARD_OFF
             MagicshineModuleType.M2 -> MagicshineProtocol.MODULE2_OFF
         }
         val parts = modeId.split("_", limit = 2)

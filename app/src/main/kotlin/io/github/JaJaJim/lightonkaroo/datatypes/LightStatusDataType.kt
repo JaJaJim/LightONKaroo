@@ -193,30 +193,24 @@ class LightStatusDataType(
                     remoteViews.setViewVisibility(R.id.light_battery_row, View.GONE)
                 }
 
-                val intentLeft = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT").apply {
-                    setPackage(context.packageName)
-                }
-                val pendingLeft = PendingIntent.getBroadcast(
-                    context, 0, intentLeft, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                remoteViews.setOnClickPendingIntent(R.id.light_status_left, pendingLeft)
+                // Only attach tap pending intents during active ride recording so Karoo's Data Pages Profile Editor receives 100% of touch gestures (long-press drag, double-tap edit/delete)
+                if (ext?.isRideActive == true) {
+                    val intentLeft = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT").apply {
+                        setPackage(context.packageName)
+                    }
+                    val pendingLeft = PendingIntent.getBroadcast(
+                        context, 0, intentLeft, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    remoteViews.setOnClickPendingIntent(R.id.light_status_left, pendingLeft)
 
-                val intentRight = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_RIGHT").apply {
-                    setPackage(context.packageName)
+                    val intentRight = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_RIGHT").apply {
+                        setPackage(context.packageName)
+                    }
+                    val pendingRight = PendingIntent.getBroadcast(
+                        context, 1, intentRight, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    remoteViews.setOnClickPendingIntent(R.id.light_status_right, pendingRight)
                 }
-                val pendingRight = PendingIntent.getBroadcast(
-                    context, 1, intentRight, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                remoteViews.setOnClickPendingIntent(R.id.light_status_right, pendingRight)
-
-                // Fallback for older Karoo system/settings: keep root clickable to turn ON
-                val intentRoot = Intent("io.github.JaJaJim.lightonkaroo.TOGGLE_LIGHTS_LEFT").apply {
-                    setPackage(context.packageName)
-                }
-                val pendingRoot = PendingIntent.getBroadcast(
-                    context, 2, intentRoot, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                remoteViews.setOnClickPendingIntent(R.id.light_status_root, pendingRoot)
 
                 emitter.updateView(remoteViews)
             }

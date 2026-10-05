@@ -265,6 +265,12 @@ class KarooLightControl(private val context: Context) : LightController {
         commandChannel.trySend(QueuedCommand(deviceId, modeName))
     }
 
+    fun forceRefreshLightParameters(deviceId: String) {
+        val listenerId = "light-params-$deviceId"
+        registeredListeners.remove(listenerId)
+        registerForLightParameters(deviceId)
+    }
+
     fun registerForLightParameters(deviceId: String) {
         val binder = lightCmdBinder
         val creator = deviceCreator

@@ -89,6 +89,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private var displayRotationJob: Job? = null
     @Volatile private var settingsUiActive = false
     @Volatile private var rideActive = false
+    val isRideActive: Boolean get() = rideActive
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -470,7 +471,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
                 for (device in antDeviceCache) {
                     lightControl.registerConnectionState(device.id)
-                    lightControl.registerForLightParameters(device.id)
+                    lightControl.forceRefreshLightParameters(device.id)
                 }
             }
         }

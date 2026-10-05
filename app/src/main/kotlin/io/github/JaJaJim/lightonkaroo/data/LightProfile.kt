@@ -60,9 +60,17 @@ object AntPlusModeProvider : LightModeProvider {
 
 class DynamicAntPlusModeProvider(private val karooNames: Set<String>) : LightModeProvider {
     override fun availableModes(): List<LightModeOption> {
-        val modes = karooNames.mapNotNull { name ->
+        val modes = karooNames.map { name ->
             val mode = LightMode.fromKarooName(name)
-            if (mode != null) LightModeOption(mode.karooName, mode.displayName) else null
+            if (mode != null) {
+                LightModeOption(mode.karooName, mode.displayName)
+            } else {
+                val formatted = name.replace("_", " ")
+                    .lowercase()
+                    .split(" ")
+                    .joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+                LightModeOption(name, formatted)
+            }
         }.sortedBy { LightMode.fromKarooName(it.id)?.modeNumber ?: Int.MAX_VALUE }
         return if (modes.any { it.id == "OFF" }) modes else listOf(LightModeOption("OFF", "Off")) + modes
     }
@@ -74,7 +82,7 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
             KarooLightControllerExtension.getInstance()
                 ?.lightControl?.supportedModes?.value?.get(it)
         }
-        if (supported != null) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
+        if (supported != null && supported.isNotEmpty()) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
     }
     LightProtocol.BLE -> {
         val config = deviceId?.let {

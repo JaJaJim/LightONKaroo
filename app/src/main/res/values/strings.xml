@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">LightONKaroo</string>
     <string name="app_description">Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3. Toggle lights ON/OFF via data field with customizable modes.</string>
-    <string name="light_status">Light Status</string>
+    <string name="light_status">Light Control</string>
     <string name="light_status_desc">Shows current light mode and battery level with intelligent rotation.</string>
     <string name="toggle_lights">Toggle Lights</string>
     <string name="settings">Settings</string>
