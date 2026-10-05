@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.4-R2 "Threat"
+# LightONKaroo v0.1.4-R3 "mini"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
@@ -25,13 +25,14 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **Left Tap**: Toggles between Primary and Secondary ON modes.
   - **Right Tap**: Turns lights OFF (or toggles in classic mode).
   - **Classic Mode**: Standard ON/OFF toggle available via settings.
-- **Customizable Modes**: Configure Primary ON, Secondary ON, and OFF states for each light.
-- **Custom Light Names**: Rename your lights (e.g., "Helmet Light") directly in extension settings to replace cryptic default ANT+ device IDs in the data field.
+- **In-Card Direct Light Configuration**: Configure Primary ON, Secondary ON, OFF state, Display Name, and Threat Warning Mode directly inside expanding light cards without popup dialogs.
+- **Advanced Light Modes**: Dynamic passthrough of 100% of all ANT+ light modes reported by Karoo OS (including `DAY_FLASH`, `NIGHT_PULSE`, `CUSTOM_MODE_1..8`, etc.) with on-demand parameter refresh `▼`.
 - **Intelligent Status UI**: 
   - Top-left status dot: Turns Authentic Karoo Turquoise when all configured lights are online and connected, White when searching or offline.
   - Visual Battery Icons (Full/Half/Empty) with color-coded alerts.
   - Adjustable rotation speed (5 to 30 seconds).
   - **Radar Fallback**: For rear lights, automatically pulls battery data from the linked Radar sensor.
+- **Native Karoo Data Pages Compatibility**: Full support for Karoo Profile Editor gestures (long-press drag & yellow highlight, double-tap edit/delete).
 - **Advanced Ride Control**:
   - Auto-on when starting a ride.
   - **Customizable Pause Behavior**: Choose between doing nothing, switching to OFF mode, Primary, Secondary, or truly turning lights OFF.
@@ -48,6 +49,21 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).
 
 ## 📝 Changelog
+### v0.1.4-R3 "mini"
+- **UI MODERNIZATION**:
+  - **In-Card Direct Light Configuration**: Removed popup dialogs. All light options (Display Name, Primary ON, Secondary ON, OFF Mode, and Software Threat Mode with test `▶` buttons) expand directly inside the light cards.
+  - **Stable List Layout**: Light cards retain their exact position in the list when toggling active state ("in-place expansion").
+  - **Enhanced High-Contrast Styling**: Clean 25% Karoo Turquoise background tint for the main container and active light cards, 25% Karoo Red tint for disabled/inactive light cards.
+  - **High-Contrast Notice & Legend Boxes**: Styled notice box for Karoo Sensor setup in 25% Turquoise, Software Threat Mode disclaimer in 25% Red with black text, and Radar Status legend in 25% Turquoise.
+- **ADVANCED LIGHT MODES**:
+  - **Dynamic Mode Passthrough**: 100% of all ANT+ modes reported by Karoo OS (including `DAY_FLASH`, `NIGHT_PULSE`, `CUSTOM_MODE_1..8`, etc.) are dynamically passed through directly into the dropdown list.
+  - **Expanded Mode Aliases**: Extended translation table mapping manufacturer-specific ANT+ mode strings to clean human-readable labels out of the box.
+  - **On-Demand Parameter Refresh**: Tapping the dropdown arrow `▼` on any mode row triggers an immediate AIDL refresh (`forceRefreshLightParameters`), retrieving live parameters from Karoo OS without background CPU/battery overhead.
+- **KAROO PROFILE EDITOR COMPATIBILITY**:
+  - **Gesture Release in Profile Editor**: Click listeners (`setOnClickPendingIntent`) are now attached strictly during active ride recording (`isRideActive == true`). During Karoo Data Pages profile editing (`rideActive == false`), no click listeners intercept touch events, giving 100% native Karoo gesture compatibility (long-press drag & yellow highlight, double-tap edit/delete).
+- **HARDWARE FIX**:
+  - **M1_HARD_OFF for Magicshine / Hori 1300Pro**: Resolved 5% standby glow on M1 BLE devices by sending the channel-0 hardware power-off command (`M1_HARD_OFF`), completely powering down the LED driver when set to OFF.
+
 ### v0.1.4-R2 "Threat"
 - **NEW**: **Automatic Update Compatibility**: Enhanced versioning (`versionCode 20` and `-R2` release revision format) for seamless Karoo Extension Manager update detection.
 
@@ -79,19 +95,11 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **UI**: Top-left lamp status indicator.
 - **FIX**: Resolved "black screen" issues by simplifying the layout.
 
-### v0.1.0-alpha
-- Initial major alpha release with View-Aware logic and Radar fallback.
-
 ### v0.0.3
 - Added configurable OFF-Mode.
 - Added status rotation and color-coding.
 - **Improved SVG rendering** and centering for custom logo.
 - **Intelligent battery fallback**: Rear lights can now pull data from linked Radar.
-
-### v0.0.2
-- Initial fork and rebranding.
-- Integrated custom logo.
-- Simplified manual control logic.
 
 ## 📜 License
 Licensed under the **MIT License**.
