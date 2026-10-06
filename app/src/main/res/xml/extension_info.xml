@@ -7,8 +7,29 @@
 
     <DataType
         typeId="light-status"
-        displayName="@string/light_status"
-        description="@string/light_status_desc"
+        displayName="LightControl (Bike 1)"
+        description="Bike 1 light status and control"
+        graphical="true"
+        icon="@drawable/ic_light" />
+
+    <DataType
+        typeId="light-status-bike-2"
+        displayName="LightControl (Bike 2)"
+        description="Bike 2 light status and control"
+        graphical="true"
+        icon="@drawable/ic_light" />
+
+    <DataType
+        typeId="light-status-bike-3"
+        displayName="LightControl (Bike 3)"
+        description="Bike 3 light status and control"
+        graphical="true"
+        icon="@drawable/ic_light" />
+
+    <DataType
+        typeId="light-status-bike-4"
+        displayName="LightControl (Bike 4)"
+        description="Bike 4 light status and control"
         graphical="true"
         icon="@drawable/ic_light" />
 

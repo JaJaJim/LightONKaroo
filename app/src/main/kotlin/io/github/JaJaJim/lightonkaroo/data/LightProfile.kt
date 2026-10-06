@@ -44,6 +44,13 @@ data class LightAssignment(
         get() = if (nickname.isNotEmpty()) nickname else deviceName
 }
 
+@Serializable
+data class BikeProfile(
+    val profileId: Int = 1,
+    val name: String = "Bike 1",
+    val lightAssignments: List<LightAssignment> = emptyList(),
+)
+
 data class LightModeOption(
     val id: String,
     val displayName: String,
@@ -113,9 +120,39 @@ data class LightControllerSettings(
     val overrideActiveModes: Boolean = false,
     val simulateRadar: Boolean = false,
     val softwareThreatModeEnabled: Boolean = false,
+    val bikeProfiles: List<BikeProfile> = (1..4).map { BikeProfile(profileId = it, name = "Bike $it") },
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
+    fun assignmentsForProfile(profileIndex: Int): List<LightAssignment> {
+        val profile = bikeProfiles.find { it.profileId == profileIndex }
+        if (profile != null && profile.lightAssignments.isNotEmpty()) {
+            return profile.lightAssignments
+        }
+        return lightAssignments
+    }
+
+    fun updateAssignmentsForProfile(profileIndex: Int, newAssignments: List<LightAssignment>): LightControllerSettings {
+        val existingProfiles = if (bikeProfiles.isEmpty()) {
+            (1..4).map { BikeProfile(profileId = it, name = "Bike $it", lightAssignments = lightAssignments) }
+        } else {
+            bikeProfiles
+        }
+        val updatedProfiles = (1..4).map { id ->
+            if (id == profileIndex) {
+                BikeProfile(profileId = id, name = "Bike $id", lightAssignments = newAssignments)
+            } else {
+                existingProfiles.find { it.profileId == id } ?: BikeProfile(profileId = id, name = "Bike $id")
+            }
+        }
+        return copy(bikeProfiles = updatedProfiles, lightAssignments = newAssignments)
+    }
+
     fun migrateProfilesToAssignments(): LightControllerSettings {
+        if (bikeProfiles.isEmpty()) {
+            return copy(
+                bikeProfiles = (1..4).map { BikeProfile(profileId = it, name = "Bike $it", lightAssignments = lightAssignments) },
+            )
+        }
         return this
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -50,6 +54,13 @@ import io.github.JaJaJim.lightonkaroo.data.modeProviderFor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+fun profileColor(index: Int): Color = when (index) {
+    1 -> Color(0xFF32E09A) // Karoo Turquoise
+    2 -> Color(0xFFFFE714) // High-Contrast Yellow
+    3 -> Color(0xFF9C27B0) // Karoo Violet
+    else -> Color(0xFFFF5722) // Karoo Orange
+}
+
 @Composable
 fun SettingsScreen(
     settings: LightControllerSettings,
@@ -59,10 +70,22 @@ fun SettingsScreen(
     onDeleteLight: (DiscoveredLight) -> Unit = {},
     onTestMode: (String, String) -> Unit = { _, _ -> },
 ) {
+    var selectedProfileTab by remember { mutableStateOf(1) }
+    val currentAccent = profileColor(selectedProfileTab)
+
+    fun saveSettings(updatedAssignments: List<LightAssignment>? = null, targetProfileTab: Int = selectedProfileTab) {
+        val nextSettings = if (updatedAssignments != null) {
+            settings.updateAssignmentsForProfile(targetProfileTab, updatedAssignments)
+        } else {
+            settings
+        }
+        onSave(nextSettings)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFA252CC).copy(alpha = 0.25f))
+            .background(currentAccent.copy(alpha = 0.25f))
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
@@ -72,12 +95,28 @@ fun SettingsScreen(
 
         SetupNoticeSection()
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        BikeProfilesSection(
+            selectedProfileTab = selectedProfileTab,
+            onTabSelected = { selectedTab ->
+                selectedProfileTab = selectedTab
+                KarooLightControllerExtension.getInstance()?.let { ext ->
+                    ext.activeProfileIndex = selectedTab
+                    ext.onAssignmentChanged()
+                }
+            },
+        )
+
         Spacer(modifier = Modifier.height(20.dp))
 
         ConnectedLightsSection(
             settings = settings,
+            selectedProfileTab = selectedProfileTab,
             discoveredLights = discoveredLights,
-            onUpdateAssignment = onUpdateAssignment,
+            onSaveAssignments = { nextList ->
+                saveSettings(updatedAssignments = nextList, targetProfileTab = selectedProfileTab)
+            },
             onTestMode = onTestMode,
         )
 
@@ -93,6 +132,7 @@ fun SettingsScreen(
 
         SoftwareThreatModeSection(
             settings = settings,
+            selectedProfileTab = selectedProfileTab,
             onSave = onSave,
         )
 
@@ -165,17 +205,75 @@ private fun SetupNoticeSection() {
 }
 
 @Composable
+private fun BikeProfilesSection(
+    selectedProfileTab: Int,
+    onTabSelected: (Int) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 2.dp,
+                color = profileColor(selectedProfileTab),
+                shape = RoundedCornerShape(8.dp),
+            )
+            .background(profileColor(selectedProfileTab).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Bike Profiles", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "Configure 4 independent bike profiles. Add the corresponding data field (Bike 1–4) to your Karoo ride profile.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        val profileChunks = (1..4).chunked(2)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (chunk in profileChunks) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (i in chunk) {
+                        val isSelected = selectedProfileTab == i
+                        val accent = profileColor(i)
+                        Button(
+                            onClick = { onTabSelected(i) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) accent else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) {
+                            Text(
+                                "Bike $i",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ConnectedLightsSection(
     settings: LightControllerSettings,
+    selectedProfileTab: Int,
     discoveredLights: List<DiscoveredLight>,
-    onUpdateAssignment: (String, LightAssignment?) -> Unit,
+    onSaveAssignments: (List<LightAssignment>) -> Unit,
     onTestMode: (String, String) -> Unit,
 ) {
-    Text("Connected Lights", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    Text("Connected Lights (Bike $selectedProfileTab)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(8.dp))
 
+    val currentAssignments = settings.assignmentsForProfile(selectedProfileTab)
     val discoveredIds = discoveredLights.map { it.id }.toSet()
-    val savedButNotFound = settings.lightAssignments.filter { it.deviceId !in discoveredIds }
+    val savedButNotFound = currentAssignments.filter { it.deviceId !in discoveredIds }
 
     // STABLE ORDER: Discovered lights first, followed by saved devices. No jumping on toggle!
     val allLights = (discoveredLights + savedButNotFound.map {
@@ -190,12 +288,24 @@ private fun ConnectedLightsSection(
         )
     } else {
         allLights.forEachIndexed { index, light ->
-            val assignment = settings.lightAssignments.find { it.deviceId == light.id }
+            val assignment = currentAssignments.find { it.deviceId == light.id }
             LightCard(
                 light = light,
                 assignment = assignment,
+                selectedProfileTab = selectedProfileTab,
                 onUpdateAssignment = { updated ->
-                    onUpdateAssignment(light.id, updated)
+                    val nextList = currentAssignments.toMutableList()
+                    if (updated == null) {
+                        nextList.removeAll { it.deviceId == light.id }
+                    } else {
+                        val idx = nextList.indexOfFirst { it.deviceId == light.id }
+                        if (idx >= 0) {
+                            nextList[idx] = updated
+                        } else {
+                            nextList.add(updated)
+                        }
+                    }
+                    onSaveAssignments(nextList)
                 },
                 onTestMode = onTestMode,
             )
@@ -234,6 +344,7 @@ private fun JanusModeSection(
 @Composable
 private fun SoftwareThreatModeSection(
     settings: LightControllerSettings,
+    selectedProfileTab: Int,
     onSave: (LightControllerSettings) -> Unit,
 ) {
     Row(
@@ -304,7 +415,8 @@ private fun SoftwareThreatModeSection(
             )
         }
 
-        val threatLights = settings.lightAssignments.filter { it.enabled && it.useForThreatMode && it.protocol == LightProtocol.ANT_PLUS }
+        val currentAssignments = settings.assignmentsForProfile(selectedProfileTab)
+        val threatLights = currentAssignments.filter { it.enabled && it.useForThreatMode && it.protocol == LightProtocol.ANT_PLUS }
         if (threatLights.isEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Column(
@@ -395,25 +507,15 @@ private fun SoftwareThreatModeSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        var threatHoldSlider by remember(settings.threatHoldTimeSeconds) { mutableStateOf(settings.threatHoldTimeSeconds.toFloat()) }
-        Column {
-            Text(
-                "Threat Hold Time: ${threatHoldSlider.toInt()}s",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = threatHoldSlider,
-                onValueChange = { threatHoldSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(threatHoldTimeSeconds = threatHoldSlider.toInt())) },
-                valueRange = 0f..5f,
-                steps = 4, // 0, 1, 2, 3, 4, 5
-            )
-        }
+        StepperSlider(
+            label = "Threat Hold Time",
+            subtitle = "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
+            value = settings.threatHoldTimeSeconds,
+            range = 0..5,
+            step = 1,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(threatHoldTimeSeconds = it)) },
+        )
     }
 }
 
@@ -502,20 +604,14 @@ private fun RideControlSection(
 
     if (settings.showDetailedStatus) {
         Spacer(modifier = Modifier.height(16.dp))
-        var rotationSpeedSlider by remember(settings.rotationSpeedSeconds) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
-        Column {
-            Text(
-                "Rotation Speed: ${rotationSpeedSlider.toInt()}s",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = rotationSpeedSlider,
-                onValueChange = { rotationSpeedSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(rotationSpeedSeconds = rotationSpeedSlider.toInt())) },
-                valueRange = 5f..30f,
-                steps = 4, // 5, 10, 15, 20, 25, 30
-            )
-        }
+        StepperSlider(
+            label = "Rotation Speed",
+            value = settings.rotationSpeedSeconds,
+            range = 5..30,
+            step = 5,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(rotationSpeedSeconds = it)) },
+        )
     }
 }
 
@@ -541,18 +637,97 @@ private fun DataFieldAppearanceSection(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    var glowIntensitySlider by remember(settings.glowIntensity) { mutableStateOf(settings.glowIntensity.toFloat()) }
-    Column {
-        Text(
-            "Ambient Side-Glow Intensity: ${glowIntensitySlider.toInt()}",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    StepperSlider(
+        label = "Ambient Side-Glow Intensity",
+        value = settings.glowIntensity,
+        range = 0..5,
+        step = 1,
+        unit = "",
+        onSaveValue = { onSave(settings.copy(glowIntensity = it)) },
+    )
+}
+
+@Composable
+private fun StepperSlider(
+    label: String,
+    subtitle: String? = null,
+    value: Int,
+    range: IntRange,
+    step: Int = 1,
+    unit: String = "",
+    onSaveValue: (Int) -> Unit,
+) {
+    var currentValue by remember(value) { mutableStateOf(value.coerceIn(range.first, range.last)) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue - step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("-", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                Text(
+                    if (unit.isNotEmpty()) "${currentValue}$unit" else "$currentValue",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue + step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("+", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         Slider(
-            value = glowIntensitySlider,
-            onValueChange = { glowIntensitySlider = it },
-            onValueChangeFinished = { onSave(settings.copy(glowIntensity = glowIntensitySlider.toInt())) },
-            valueRange = 0f..5f,
-            steps = 4, // 0, 1, 2, 3, 4, 5
+            value = currentValue.toFloat(),
+            onValueChange = { currentValue = it.toInt() },
+            onValueChangeFinished = { onSaveValue(currentValue) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = if (((range.last - range.first) / step) > 1) ((range.last - range.first) / step) - 1 else 0,
         )
     }
 }
@@ -581,6 +756,7 @@ private fun FooterSection() {
 private fun LightCard(
     light: DiscoveredLight,
     assignment: LightAssignment?,
+    selectedProfileTab: Int,
     onUpdateAssignment: (LightAssignment?) -> Unit,
     onTestMode: (deviceId: String, modeId: String) -> Unit,
 ) {
@@ -670,7 +846,7 @@ private fun LightCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Slide to activate",
+                "Slide to activate on Bike $selectedProfileTab",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,

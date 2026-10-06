@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 data class DiscoveredLight(
     val id: String,
@@ -80,6 +82,37 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     var isRadarThreatActive: Boolean = false
         private set
 
+    @Volatile
+    var activeProfileIndex: Int = 1
+
+    private val activeDataFieldProfiles = Collections.newSetFromMap(ConcurrentHashMap<Int, Boolean>())
+
+    fun registerActiveDataField(profileIndex: Int) {
+        activeDataFieldProfiles.add(profileIndex)
+        activeProfileIndex = getMasterDataFieldProfile()
+        syncBleAssignments()
+        startBleIfNeeded()
+        for (id in magicshineController.assignedDeviceIds) {
+            magicshineController.connect(id)
+        }
+        Timber.d("$TAG: Registered data field Bike $profileIndex. Active profiles: $activeDataFieldProfiles, Master: $activeProfileIndex")
+    }
+
+    fun unregisterActiveDataField(profileIndex: Int) {
+        activeDataFieldProfiles.remove(profileIndex)
+        activeProfileIndex = getMasterDataFieldProfile()
+        syncBleAssignments()
+        startBleIfNeeded()
+        for (id in magicshineController.assignedDeviceIds) {
+            magicshineController.connect(id)
+        }
+        Timber.d("$TAG: Unregistered data field Bike $profileIndex. Active profiles: $activeDataFieldProfiles, Master: $activeProfileIndex")
+    }
+
+    fun getMasterDataFieldProfile(): Int {
+        return activeDataFieldProfiles.minOrNull() ?: activeProfileIndex
+    }
+
     private var lastThreatLevel: Int = 0
     private var lastRadarEventTimestamp = 0L
 
@@ -94,7 +127,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val types by lazy {
-        listOf(LightStatusDataType(engine))
+        listOf(
+            LightStatusDataType(engine, bikeProfileIndex = 1),
+            LightStatusDataType(engine, bikeProfileIndex = 2),
+            LightStatusDataType(engine, bikeProfileIndex = 3),
+            LightStatusDataType(engine, bikeProfileIndex = 4),
+        )
     }
 
     override fun onCreate() {
@@ -114,7 +152,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         engine = LightControlEngine()
 
         engine.onApplyState = { state ->
-            for (assignment in engine.settings.lightAssignments) {
+            val masterIndex = getMasterDataFieldProfile()
+            val assignments = engine.settings.assignmentsForProfile(masterIndex)
+            for (assignment in assignments) {
                 if (!assignment.enabled) continue
 
                 // If threat is active, defer mode changes for threat-participating lights until threat clears
@@ -130,7 +170,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         }
 
         engine.onApplyHardwareOff = {
-            for (assignment in engine.settings.lightAssignments) {
+            val masterIndex = getMasterDataFieldProfile()
+            val assignments = engine.settings.assignmentsForProfile(masterIndex)
+            for (assignment in assignments) {
                 if (!assignment.enabled) continue
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
@@ -173,7 +215,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         displayRotationJob = extensionScope.launch {
             var currentIndex = 0
             while (true) {
-                val assignments = engine.settings.lightAssignments.filter { it.enabled }
+                val masterIndex = getMasterDataFieldProfile()
+                val assignments = engine.settings.assignmentsForProfile(masterIndex)
                 val discovered = discoveredLights.value
 
                 val allConnected = assignments.isNotEmpty() && assignments.all { assignment ->
@@ -311,14 +354,16 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun syncBleAssignments() {
-        magicshineController.assignedDeviceIds = engine.settings.lightAssignments
+        val masterIndex = getMasterDataFieldProfile()
+        magicshineController.assignedDeviceIds = engine.settings.assignmentsForProfile(masterIndex)
             .filter { it.enabled && it.protocol == LightProtocol.BLE }
             .map { it.deviceId }
             .toSet()
     }
 
     fun testMode(deviceId: String, modeName: String) {
-        val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
+        val masterIndex = getMasterDataFieldProfile()
+        val assignment = engine.settings.assignmentsForProfile(masterIndex).find { it.deviceId == deviceId } ?: return
         extensionScope.launch {
             lightControllers[assignment.protocol]?.setMode(deviceId, modeName)
             delay(3000)
@@ -334,7 +379,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         startBleIfNeeded()
         updateRadarMonitoring()
         if (settingsUiActive) {
-            for (assignment in engine.settings.lightAssignments) {
+            val masterIndex = getMasterDataFieldProfile()
+            for (assignment in engine.settings.assignmentsForProfile(masterIndex)) {
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
         }
@@ -343,6 +389,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     fun setSettingsUiActive(active: Boolean) {
         Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
+        magicshineController.isSettingsUiActive = active
         if (active) {
             lightControl.bind()
             startDiscoveryPolling()
@@ -350,7 +397,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             startDisplayRotation()
             extensionScope.launch {
                 delay(500)
-                for (assignment in engine.settings.lightAssignments) {
+                val masterIndex = getMasterDataFieldProfile()
+                for (assignment in engine.settings.assignmentsForProfile(masterIndex)) {
                     lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
                 }
             }
@@ -393,8 +441,10 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         discoveryPollingJob = null
     }
 
-    private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.BLE }
+    private fun hasBleAssignments(): Boolean {
+        val masterIndex = getMasterDataFieldProfile()
+        return engine.settings.assignmentsForProfile(masterIndex).any { it.enabled && it.protocol == LightProtocol.BLE }
+    }
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
@@ -487,8 +537,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private var antDeviceCache = listOf<AntDeviceInfo>()
 
     private fun updateAntLights() {
+        val masterIndex = getMasterDataFieldProfile()
         _antLights.value = antDeviceCache.map { device ->
-            val assignment = engine.settings.lightAssignments.find { it.deviceId == device.id }
+            val assignment = engine.settings.assignmentsForProfile(masterIndex).find { it.deviceId == device.id }
             val useRadarBattery = assignment?.role == LightRole.REAR
 
             DiscoveredLight(
@@ -504,7 +555,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
     private fun buildModeDetail(state: Int): String {
         if (state == 0) return "Lights Off"
-        return engine.settings.lightAssignments.filter { it.enabled }.joinToString("\n") {
+        val masterIndex = getMasterDataFieldProfile()
+        return engine.settings.assignmentsForProfile(masterIndex).filter { it.enabled }.joinToString("\n") {
             val modeId = it.modeForState(state)
             val displayName = modeProviderFor(it.protocol, it.deviceId)
                 .availableModes()
@@ -540,7 +592,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun updateRadarMonitoring() {
-        val needsRadar = engine.settings.softwareThreatModeEnabled && engine.settings.lightAssignments.any { it.enabled && it.isThreatModeEnabled && it.protocol == LightProtocol.ANT_PLUS }
+        val masterIndex = getMasterDataFieldProfile()
+        val needsRadar = engine.settings.softwareThreatModeEnabled && engine.settings.assignmentsForProfile(masterIndex).any { it.enabled && it.isThreatModeEnabled && it.protocol == LightProtocol.ANT_PLUS }
         val simulate = engine.settings.softwareThreatModeEnabled && engine.settings.simulateRadar
 
         if (simulate) {
@@ -836,7 +889,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 return
             }
 
-            for (assignment in engine.settings.lightAssignments) {
+            val masterIndex = getMasterDataFieldProfile()
+            val currentProfileAssignments = engine.settings.assignmentsForProfile(masterIndex)
+            for (assignment in currentProfileAssignments) {
                 if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
 
                 val activeState = engine.activeState.value
@@ -875,7 +930,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 Timber.d("$TAG: Software threat CLEAR (after hold time)")
                 engine.updateDisplayInfo(engine.displayInfo.value)
 
-                for (assignment in engine.settings.lightAssignments) {
+                val masterIndex = getMasterDataFieldProfile()
+                val currentProfileAssignments = engine.settings.assignmentsForProfile(masterIndex)
+                for (assignment in currentProfileAssignments) {
                     if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
                     val activeState = engine.activeState.value
                     val restoreMode = assignment.modeForState(activeState)
