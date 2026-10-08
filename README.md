@@ -2,7 +2,7 @@
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3**. (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
-This project is a fork of Dennis Strasser's [KarooFireFly](https://github.com/derstrassi/karoofirefly), created by **Peter Weber** using the **Google Gemini AI Agent**. It’s an "AI-assisted experiment" designed for simplicity and direct control.
+This project is a fork of Dennis Strasser's [KarooFireFly](https://github.com/derstrassi/karoofirefly), created by **Peter Weber** using the **Google Gemini AI Agent**. It incorporates BLE smart light protocol implementations for **iGPSPORT** lights based on Tiago Fontes Dias's [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) project.
 
 ## ⚠️ Important Warning
 > [!WARNING]
@@ -26,6 +26,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **Right Tap**: Turns lights OFF (or toggles in classic mode).
   - **Classic Mode**: Standard ON/OFF toggle available via settings.
 - **In-Card Direct Light Configuration**: Configure Primary ON, Secondary ON, OFF state, Display Name, and Threat Warning Mode directly inside expanding light cards without popup dialogs.
+- **iGPSPORT Smart Light Integration**: Dedicated independent BLE stack supporting iGPSPORT smart bike lights (VS1800S, VS1200, VS800, VS500) with custom lighting profiles, brightness steps, and light sensor auto-dimming options.
 - **Advanced Light Modes**: Dynamic passthrough of 100% of all ANT+ light modes reported by Karoo OS (including `DAY_FLASH`, `NIGHT_PULSE`, `CUSTOM_MODE_1..8`, etc.) with on-demand parameter refresh `▼`.
 - **Intelligent Status UI**: 
   - Top-left status dot: Turns Authentic Karoo Turquoise when all configured lights are online and connected, White when searching or offline.
@@ -46,10 +47,14 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 ## 🚲 Hardware Compatibility
 - **Tested Hardware**: Magene AT1200, Magicshine Hori 1300Pro, Ravemen FR300 ANT+, Coospo TR70, and Cycplus L7 radar.
 - **ANT+**: Works with most smart lights recognized by Karoo.
-- **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).
+- **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S and 1300Pro. Supports iGPSPORT VS1800S, VS1200, VS800, VS500 series smart lights with custom profiles and light sensor auto-dimming.
 
 ## 📝 Changelog
 ### v0.1.4-R3 "Threat"
+- **iGPSPORT SMART LIGHT INTEGRATION**:
+  - **Dedicated BLE Stack**: Independent Bluetooth controller supporting iGPSPORT smart bike lights (VS1800S, VS1200, VS800, VS500).
+  - **Custom Profiles & Auto-Dimming**: Seamless UI integration with custom profile options, brightness levels, and ambient light sensor auto-dimming checkbox.
+  - **Attribution**: Based on Tiago Fontes Dias's [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) library.
 - **UI MODERNIZATION**:
   - **In-Card Direct Light Configuration**: Removed popup dialogs. All light options (Display Name, Primary ON, Secondary ON, OFF Mode, and Software Threat Mode with test `▶` buttons) expand directly inside the light cards.
   - **Stable List Layout**: Light cards retain their exact position in the list when toggling active state ("in-place expansion").

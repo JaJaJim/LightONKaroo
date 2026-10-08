@@ -36,10 +36,10 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
-class MagicshineBleController(context: Context) : LightController {
+class IgpsportBleController(context: Context) : LightController {
 
     companion object {
-        private const val TAG = "MagicshineBle"
+        private const val TAG = "IgpsportBle"
         private const val WRITE_RETRIES = 5
         private const val WRITE_RETRY_DELAY_MS = 60L
         private const val RECONNECT_MIN_MS = 10_000L
@@ -51,16 +51,15 @@ class MagicshineBleController(context: Context) : LightController {
     private val centralManager by lazy { CentralManager.native(appContext, scope) }
     private val writeMutex = Mutex()
 
-    private val targetService = Uuid.parse(MagicshineProtocol.SERVICE_UUID)
-    private val targetChar = Uuid.parse(MagicshineProtocol.CHARACTERISTIC_UUID)
+    private val targetService = Uuid.parse(IgpsportProtocol.SERVICE_UUID)
+    private val targetChar = Uuid.parse(IgpsportProtocol.CHARACTERISTIC_UUID)
 
     private data class BleDevice(val peripheral: Peripheral, val name: String)
 
     private val devices = ConcurrentHashMap<String, BleDevice>()
     private val characteristics = ConcurrentHashMap<String, RemoteCharacteristic>()
-    private val deviceConfigs = ConcurrentHashMap<String, MagicshineDeviceConfig>()
+    private val deviceConfigs = ConcurrentHashMap<String, IgpsportDeviceConfig>()
     private val batteryLevels = ConcurrentHashMap<String, Int>()
-    private val temperatures = ConcurrentHashMap<String, Int>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
@@ -69,11 +68,8 @@ class MagicshineBleController(context: Context) : LightController {
     var assignedDeviceIds: Set<String> = emptySet()
     var isSettingsUiActive: Boolean = false
 
-    fun getDeviceConfig(address: String): MagicshineDeviceConfig {
-        val name = devices[address]?.name ?: "Magicshine"
-        val config = MagicshineDeviceConfig.forDevice(name)
-        deviceConfigs[address] = config
-        return config
+    fun getDeviceConfig(address: String): IgpsportDeviceConfig {
+        return deviceConfigs.getOrPut(address) { IgpsportDeviceConfig() }
     }
 
     private var scanCallback: ScanCallback? = null
@@ -90,11 +86,11 @@ class MagicshineBleController(context: Context) : LightController {
                 if (scanCallback != null) break
                 val scanner = bleScanner
                 if (scanner != null) {
-                    Timber.d("$TAG: Starting BLE discovery (attempt $attempt)")
+                    Timber.d("$TAG: Starting iGPSPORT BLE discovery (attempt $attempt)")
                     executeBleScan(scanner)
                     break
                 }
-                Timber.w("$TAG: BLE scanner null, retrying in 500ms (attempt $attempt)...")
+                Timber.w("$TAG: iGPSPORT BLE scanner null, retrying in 500ms (attempt $attempt)...")
                 delay(500L)
             }
         }
@@ -108,23 +104,14 @@ class MagicshineBleController(context: Context) : LightController {
                     val address = result.device?.address ?: return
                     if (devices.containsKey(address)) return
 
-                    val rawName = result.scanRecord?.deviceName ?: result.device?.name ?: return
+                    val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: return
                     val nameUpper = rawName.uppercase()
 
-                    val isMagicshine = nameUpper.contains("MAGICSHINE") ||
-                                       nameUpper.contains("M1") ||
-                                       nameUpper.contains("M2") ||
-                                       nameUpper.contains("M3") ||
-                                       nameUpper.contains("HORI") ||
-                                       nameUpper.contains("EVO") ||
-                                       nameUpper.contains("CBL") ||
-                                       nameUpper.contains("RAY") ||
-                                       nameUpper.contains("SEEMEE") ||
-                                       nameUpper.contains("MONTEER") ||
-                                       address in assignedDeviceIds
+                    val isIgpsport = IgpsportProtocol.SUPPORTED_PREFIXES.any { nameUpper.contains(it) } ||
+                                     address in assignedDeviceIds
 
-                    if (isMagicshine) {
-                        Timber.d("$TAG: Found Magicshine light: $rawName ($address)")
+                    if (isIgpsport) {
+                        Timber.d("$TAG: Found iGPSPORT light: $rawName ($address)")
                         scope.launch { registerFoundDevice(address, rawName) }
                     }
                 } catch (e: Exception) {
@@ -133,7 +120,7 @@ class MagicshineBleController(context: Context) : LightController {
             }
 
             override fun onScanFailed(errorCode: Int) {
-                Timber.e("$TAG: BLE scan failed: $errorCode")
+                Timber.e("$TAG: iGPSPORT BLE scan failed: $errorCode")
             }
         }
         try {
@@ -143,7 +130,7 @@ class MagicshineBleController(context: Context) : LightController {
             scanner.startScan(null, settings, callback)
             scanCallback = callback
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to start BLE scan")
+            Timber.e(e, "$TAG: Failed to start iGPSPORT BLE scan")
         }
     }
 
@@ -154,8 +141,8 @@ class MagicshineBleController(context: Context) : LightController {
             return
         }
         devices[address] = BleDevice(peripheral, name)
-        deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
-        Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]?.moduleType}")
+        deviceConfigs[address] = IgpsportDeviceConfig()
+        Timber.d("$TAG: iGPSPORT device registered: $name ($address)")
         updateDiscoveredLights()
         startConnectionSupervisor(address)
     }
@@ -170,7 +157,7 @@ class MagicshineBleController(context: Context) : LightController {
             try {
                 bleScanner?.stopScan(cb)
             } catch (e: Exception) {
-                Timber.w(e, "$TAG: Failed to stop BLE scan")
+                Timber.w(e, "$TAG: Failed to stop iGPSPORT BLE scan")
             }
         }
         scanCallback = null
@@ -204,12 +191,12 @@ class MagicshineBleController(context: Context) : LightController {
         val peripheral = devices[address]?.peripheral
             ?: centralManager.getPeripheralsById(listOf(address)).firstOrNull()
             ?: return false
-        val name = devices[address]?.name ?: peripheral.name ?: "Magicshine"
+        val name = devices[address]?.name ?: peripheral.name ?: "iGPSPORT Light"
         devices.putIfAbsent(address, BleDevice(peripheral, name))
-        deviceConfigs.putIfAbsent(address, MagicshineDeviceConfig.forDevice(name))
+        deviceConfigs.putIfAbsent(address, IgpsportDeviceConfig())
 
         return try {
-            Timber.d("$TAG: Connecting to $address")
+            Timber.d("$TAG: Connecting to iGPSPORT light at $address")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
                 retry = 2,
@@ -226,17 +213,17 @@ class MagicshineBleController(context: Context) : LightController {
                 }
             } ?: false
             if (!connected) {
-                Timber.w("$TAG: Connection timeout for $address")
+                Timber.w("$TAG: Connection timeout for iGPSPORT light $address")
                 return false
             }
 
             val characteristic = findTargetCharacteristic(peripheral)
             if (characteristic == null) {
-                Timber.w("$TAG: Characteristic not found for $address")
+                Timber.w("$TAG: Characteristic not found for iGPSPORT light $address")
                 return false
             }
             characteristics[address] = characteristic
-            Timber.d("$TAG: Connected to $address, characteristic found")
+            Timber.d("$TAG: Connected to iGPSPORT light $address, characteristic found")
 
             scope.launch {
                 try {
@@ -245,28 +232,16 @@ class MagicshineBleController(context: Context) : LightController {
             }
 
             delay(180)
-            writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
-            delay(100)
-            writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
+            writeBytes(address, IgpsportProtocol.buildQueryBattery())
 
             updateDiscoveredLights()
             onDeviceConnected?.invoke()
 
-            scope.launch {
-                while (characteristics.containsKey(address)) {
-                    delay(60_000)
-                    if (!characteristics.containsKey(address)) break
-                    writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
-                    delay(100)
-                    writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
-                }
-            }
-
             peripheral.state.first { it is ConnectionState.Disconnected }
-            Timber.d("$TAG: Disconnected from $address")
+            Timber.d("$TAG: Disconnected from iGPSPORT light $address")
             true
         } catch (e: Exception) {
-            Timber.w(e, "$TAG: Connect attempt failed for $address")
+            Timber.w(e, "$TAG: Connect attempt failed for iGPSPORT light $address")
             false
         } finally {
             characteristics.remove(address)
@@ -292,49 +267,33 @@ class MagicshineBleController(context: Context) : LightController {
             DiscoveredLight(
                 id = address,
                 name = device.name,
-                manufacturer = "Magicshine",
+                manufacturer = "iGPSPORT",
                 protocol = LightProtocol.BLE,
                 connected = characteristics.containsKey(address),
                 batteryPercent = batteryLevels[address],
-                temperature = temperatures[address],
             )
         }
     }
 
     private fun parseNotification(address: String, data: ByteArray) {
-        if (data.size < 6) return
-        Timber.d("$TAG: Notification from $address: ${MagicshineProtocol.bytesToHex(data)}")
-        val type = data[2].toInt() and 0xFF
-        val content = if (data.size > 6) data.sliceArray(4 until data.size - 2) else byteArrayOf()
-
-        when (type) {
-            0xB4 -> {
-                if (content.size >= 5) {
-                    val battery = content[4].toInt() and 0xFF
-                    if (battery in 0..100) {
-                        batteryLevels[address] = battery
-                        updateDiscoveredLights()
-                    }
-                }
-            }
-            0xB1 -> {
-                if (content.size >= 3) {
-                    val temp = content[2].toInt()
-                    temperatures[address] = temp
-                    updateDiscoveredLights()
-                }
+        if (data.size < 4) return
+        if (data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
+            val battery = data[3].toInt() and 0xFF
+            if (battery in 0..100) {
+                batteryLevels[address] = battery
+                updateDiscoveredLights()
             }
         }
     }
 
     override fun setMode(deviceId: String, modeName: String) {
-        val config = deviceConfigs.getOrPut(deviceId) { MagicshineDeviceConfig.forDevice("Magicshine") }
-        val command = config.buildCommand(modeName)
+        val config = getDeviceConfig(deviceId)
+        val command = config.buildCommand(modeName, config.autoDimmingEnabled)
         if (command == null) {
-            Timber.w("$TAG: Unknown mode: $modeName for device $deviceId")
+            Timber.w("$TAG: Unknown mode: $modeName for iGPSPORT device $deviceId")
             return
         }
-        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${MagicshineProtocol.bytesToHex(command)}")
+        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${IgpsportProtocol.bytesToHex(command)}")
         scope.launch {
             writeBytes(deviceId, command)
         }
@@ -343,7 +302,7 @@ class MagicshineBleController(context: Context) : LightController {
     private suspend fun writeBytes(address: String, bytes: ByteArray) {
         val characteristic = characteristics[address]
         if (characteristic == null) {
-            Timber.w("$TAG: Not connected to $address, cannot send command")
+            Timber.w("$TAG: Not connected to iGPSPORT light $address, cannot send command")
             return
         }
 

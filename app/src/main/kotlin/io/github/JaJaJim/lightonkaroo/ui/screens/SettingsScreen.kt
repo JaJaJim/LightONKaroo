@@ -772,6 +772,33 @@ private fun LightCard(
                     )
                 }
             }
+
+            if (light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
+                val igpController = KarooLightControllerExtension.getInstance()?.igpsportController
+                val igpConfig = igpController?.getDeviceConfig(light.id)
+                var autoDimming by remember(light.id) { mutableStateOf(igpConfig?.autoDimmingEnabled ?: false) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Enable Light Sensor Auto-Dimming", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Automatically adjusts brightness based on ambient light sensor",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = autoDimming,
+                        onCheckedChange = {
+                            autoDimming = it
+                        },
+                    )
+                }
+            }
         }
     }
 }
