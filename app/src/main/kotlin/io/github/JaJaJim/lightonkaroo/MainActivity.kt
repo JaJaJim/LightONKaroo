@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -96,6 +97,42 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val ext = KarooLightControllerExtension.getInstance() ?: return super.onKeyDown(keyCode, event)
+        val settings = ext.engine.settings
+
+        if (settings.remoteEnabled && settings.remoteSniffingActive) {
+            lifecycleScope.launch {
+                val newSettings = if (settings.remoteSniffingTarget == "SECONDARY") {
+                    settings.copy(remoteSecondaryKeycode = keyCode, remoteSniffingActive = false)
+                } else {
+                    settings.copy(remoteBoundKeycode = keyCode, remoteSniffingActive = false)
+                }
+                repository.updateSettings(newSettings)
+                ext.engine.settings = newSettings
+            }
+            return true
+        }
+
+        if (settings.remoteEnabled) {
+            if (settings.remoteSecondaryKeycode != 0 && keyCode == settings.remoteSecondaryKeycode) {
+                if (settings.threeModeEnabled) {
+                    ext.engine.onApplyState?.invoke(2) // Secondary ON
+                } else {
+                    ext.engine.onApplyHardwareOff?.invoke() // OFF
+                }
+                return true
+            }
+
+            if (settings.remoteBoundKeycode != 0 && keyCode == settings.remoteBoundKeycode) {
+                ext.engine.onToggleLights() // Primary ON / OFF toggle
+                return true
+            }
+        }
+
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onStart() {

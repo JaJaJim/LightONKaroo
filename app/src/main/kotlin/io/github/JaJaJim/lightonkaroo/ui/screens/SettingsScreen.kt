@@ -1,5 +1,6 @@
 package io.github.JaJaJim.lightonkaroo.ui.screens
 
+import android.view.KeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,7 +29,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -224,56 +224,14 @@ private fun ConnectedRemoteSection(
     Text("Connected Remote", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(8.dp))
 
-    val ext = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
-    val discoveredRemotes = ext?.bleRemoteController?.discoveredRemotes?.collectAsState(initial = emptyList())?.value ?: emptyList()
-
-    val savedAddress = settings.remoteDeviceAddress
-    val savedName = if (settings.remoteDeviceName.isNotEmpty()) settings.remoteDeviceName else "Bluetooth Remote"
-
-    val allRemotes = buildList {
-        discoveredRemotes.forEach { add(it) }
-        if (savedAddress.isNotEmpty() && none { it.address == savedAddress }) {
-            add(io.github.JaJaJim.lightonkaroo.ble.DiscoveredRemote(savedAddress, savedName, connected = false))
-        }
-    }
-
-    if (allRemotes.isEmpty()) {
-        Text(
-            "No BLE remotes found. Turn on your Bluetooth camera shutter or media remote to discover.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    } else {
-        allRemotes.forEachIndexed { index, remote ->
-            val isBound = settings.remoteDeviceAddress == remote.address
-            RemoteCard(
-                remote = remote,
-                isBound = isBound,
-                settings = settings,
-                onSave = onSave,
-            )
-            if (index < allRemotes.lastIndex) {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun RemoteCard(
-    remote: io.github.JaJaJim.lightonkaroo.ble.DiscoveredRemote,
-    isBound: Boolean,
-    settings: LightControllerSettings,
-    onSave: (LightControllerSettings) -> Unit,
-) {
-    val enabled = isBound
+    val enabled = settings.remoteEnabled
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(
                 width = 1.dp,
-                color = if (remote.connected) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(8.dp),
             )
             .background(
@@ -283,29 +241,24 @@ private fun RemoteCard(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Line 1: Remote Name; Line 2: Subtitle
+        // Line 1: Name; Line 2: Subtitle
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = remote.name,
+                text = "Bluetooth Remote (HID Shutter)",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
             )
-
-            val statusText = if (remote.connected) "Connected" else "Not found"
             Text(
-                text = "BLE Remote · $statusText",
+                text = "HID Remote · Pair in Android Bluetooth Settings",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        // Line 3: "Slide to activate" + Switch
+        // Line 3: Slide to activate
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -322,31 +275,12 @@ private fun RemoteCard(
             Switch(
                 checked = enabled,
                 onCheckedChange = { active ->
-                    if (active) {
-                        onSave(
-                            settings.copy(
-                                remoteDeviceAddress = remote.address,
-                                remoteDeviceName = remote.name,
-                            ),
-                        )
-                        io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.let { ext ->
-                            ext.bleRemoteController.boundAddress = remote.address
-                            ext.bleRemoteController.startSupervisor()
-                        }
-                    } else {
-                        onSave(
-                            settings.copy(
-                                remoteDeviceAddress = "",
-                                remoteDeviceName = "",
-                                remoteBoundBytesHex = "",
-                                remoteSecondaryBytesHex = "",
-                                remoteSniffingActive = false,
-                            ),
-                        )
-                        io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.let { ext ->
-                            ext.bleRemoteController.boundAddress = ""
-                        }
-                    }
+                    onSave(
+                        settings.copy(
+                            remoteEnabled = active,
+                            remoteSniffingActive = false,
+                        ),
+                    )
                 },
             )
         }
@@ -363,9 +297,10 @@ private fun RemoteCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Primary Button (ON / Toggle)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     val statusText = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY") {
-                        "🔴 Sniffing... Press button on remote!"
-                    } else if (settings.remoteBoundBytesHex.isNotEmpty()) {
-                        "🟢 Bound (${settings.remoteBoundBytesHex})"
+                        "🔴 Sniffing... Press remote button now!"
+                    } else if (settings.remoteBoundKeycode != 0) {
+                        val keyName = KeyEvent.keyCodeToString(settings.remoteBoundKeycode).replace("KEYCODE_", "")
+                        "🟢 Bound: $keyName (Code ${settings.remoteBoundKeycode})"
                     } else {
                         "⚪ Not bound"
                     }
@@ -403,9 +338,10 @@ private fun RemoteCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Secondary Button (Janus / OFF)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     val statusText = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY") {
-                        "🔴 Sniffing... Press button on remote!"
-                    } else if (settings.remoteSecondaryBytesHex.isNotEmpty()) {
-                        "🟢 Bound (${settings.remoteSecondaryBytesHex})"
+                        "🔴 Sniffing... Press remote button now!"
+                    } else if (settings.remoteSecondaryKeycode != 0) {
+                        val keyName = KeyEvent.keyCodeToString(settings.remoteSecondaryKeycode).replace("KEYCODE_", "")
+                        "🟢 Bound: $keyName (Code ${settings.remoteSecondaryKeycode})"
                     } else {
                         "⚪ Not bound"
                     }

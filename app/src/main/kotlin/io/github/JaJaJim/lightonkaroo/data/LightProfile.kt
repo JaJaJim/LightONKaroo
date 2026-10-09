@@ -113,10 +113,13 @@ data class LightControllerSettings(
     val overrideActiveModes: Boolean = false,
     val simulateRadar: Boolean = false,
     val softwareThreatModeEnabled: Boolean = false,
+    val remoteEnabled: Boolean = false,
     val remoteDeviceAddress: String = "",
     val remoteDeviceName: String = "",
     val remoteBoundBytesHex: String = "",
     val remoteSecondaryBytesHex: String = "",
+    val remoteBoundKeycode: Int = 0,
+    val remoteSecondaryKeycode: Int = 0,
     val remoteSniffingActive: Boolean = false,
     val remoteSniffingTarget: String = "PRIMARY", // PRIMARY or SECONDARY
     val lightAssignments: List<LightAssignment> = emptyList(),

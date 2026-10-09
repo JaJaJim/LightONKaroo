@@ -2,7 +2,6 @@ package io.github.JaJaJim.lightonkaroo
 
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.ble.BleRemoteController
-import io.github.JaJaJim.lightonkaroo.ble.BleRemoteProtocol
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
@@ -121,17 +120,21 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             engine.onApplyState?.invoke(engine.activeState.value)
         }
 
-        bleRemoteController.onButtonNotification = { hexPattern ->
+        bleRemoteController.onAdvertisingPacketReceived = { address, name, hexPattern ->
             val settings = engine.settings
             if (settings.remoteSniffingActive) {
                 val newSettings = if (settings.remoteSniffingTarget == "SECONDARY") {
                     settings.copy(
-                        remoteSecondaryBytesHex = hexPattern,
+                        remoteDeviceAddress = address,
+                        remoteDeviceName = name,
+                        remoteSecondaryBytesHex = hexPattern.take(24),
                         remoteSniffingActive = false,
                     )
                 } else {
                     settings.copy(
-                        remoteBoundBytesHex = hexPattern,
+                        remoteDeviceAddress = address,
+                        remoteDeviceName = name,
+                        remoteBoundBytesHex = hexPattern.take(24),
                         remoteSniffingActive = false,
                     )
                 }
@@ -139,18 +142,13 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     repository.updateSettings(newSettings)
                     engine.settings = newSettings
                 }
-                Timber.d("$TAG: Sniffed remote button pattern for ${settings.remoteSniffingTarget}: $hexPattern")
-            } else if (settings.remoteSecondaryBytesHex.isNotEmpty() && hexPattern.startsWith(settings.remoteSecondaryBytesHex)) {
-                Timber.d("$TAG: Secondary remote button pressed ($hexPattern)! Triggering Janus mode / Secondary toggle...")
-                if (settings.threeModeEnabled) {
-                    engine.onApplyState?.invoke(2)
-                } else {
-                    engine.onApplyHardwareOff?.invoke()
-                }
-            } else if (settings.remoteBoundBytesHex.isNotEmpty() && hexPattern.startsWith(settings.remoteBoundBytesHex)) {
-                Timber.d("$TAG: Primary remote button pressed ($hexPattern)! Triggering Primary light toggle...")
-                engine.onToggleLights()
+                Timber.d("$TAG: Sniffed raw BLE advertising packet for ${settings.remoteSniffingTarget}: $address ($hexPattern)")
             }
+        }
+
+        bleRemoteController.onRemoteButtonPressed = {
+            Timber.d("$TAG: Bound BLE remote advertising packet received! Triggering light action...")
+            engine.onToggleLights()
         }
 
         engine = LightControlEngine()
@@ -305,7 +303,6 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 engine.onRideStart()
                 startDiscoveryPolling()
                 startBleIfNeeded()
-                bleRemoteController.startSupervisor()
                 if (!allAssignedBleConnected()) {
                     Timber.d("$TAG: Ride recording active/resumed but BLE lights not connected. Forcing unified BLE discovery scan.")
                     extensionScope.launch {
@@ -385,14 +382,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
         magicshineController.isSettingsUiActive = active
-        bleRemoteController.isSettingsUiActive = active
 
         if (active) {
             lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
             startDisplayRotation()
-            bleRemoteController.startSupervisor()
             extensionScope.launch {
                 delay(500)
                 for (assignment in engine.settings.lightAssignments) {
@@ -476,7 +471,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                     try {
                         val address = result.device?.address ?: return
-                        val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: return
+                        val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: "BLE Device"
                         val nameUpper = rawName.uppercase()
 
                         val isMagicshine = nameUpper.contains("MAGICSHINE") ||
@@ -490,17 +485,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                                            nameUpper.contains("SEEMEE") ||
                                            nameUpper.contains("MONTEER")
 
-                        val isRemote = BleRemoteProtocol.SUPPORTED_PREFIXES.any { nameUpper.contains(it) } ||
-                                       address == bleRemoteController.boundAddress
-
                         if (isMagicshine) {
-                            Timber.d("$TAG: Unified BLE scan found Magicshine light: $rawName ($address)")
                             magicshineController.registerFoundDevice(address, rawName)
                         }
-                        if (isRemote) {
-                            Timber.d("$TAG: Unified BLE scan found Remote: $rawName ($address)")
-                            bleRemoteController.registerFoundDevice(address, rawName)
-                        }
+
+                        // Always delegate raw BLE advertising packets to BleRemoteController for 10ms button triggers
+                        bleRemoteController.handleAdvertisingPacket(address, rawName, result.scanRecord?.bytes)
                     } catch (e: Exception) {
                         Timber.w(e, "$TAG: Skipping unified scan result")
                     }
