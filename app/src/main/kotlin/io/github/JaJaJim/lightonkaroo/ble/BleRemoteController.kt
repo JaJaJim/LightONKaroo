@@ -16,12 +16,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import no.nordicsemi.kotlin.ble.client.android.CentralManager
 import no.nordicsemi.kotlin.ble.client.android.Peripheral
 import no.nordicsemi.kotlin.ble.client.android.native
-import no.nordicsemi.kotlin.ble.client.RemoteCharacteristic
 import no.nordicsemi.kotlin.ble.core.ConnectionState
 import timber.log.Timber
 import kotlin.time.Duration.Companion.seconds
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 data class DiscoveredRemote(
     val address: String,
@@ -29,7 +26,6 @@ data class DiscoveredRemote(
     val connected: Boolean = false,
 )
 
-@OptIn(ExperimentalUuidApi::class)
 class BleRemoteController(context: Context) {
 
     companion object {
@@ -41,9 +37,6 @@ class BleRemoteController(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val centralManager by lazy { CentralManager.native(appContext, scope) }
-
-    private val targetService = Uuid.parse(BleRemoteProtocol.HID_SERVICE_UUID)
-    private val targetChar = Uuid.parse(BleRemoteProtocol.REPORT_CHAR_UUID)
 
     private val discoveredRemotesMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val _discoveredRemotes = MutableStateFlow<List<DiscoveredRemote>>(emptyList())
@@ -166,22 +159,11 @@ class BleRemoteController(context: Context) {
 
             if (!connected) return false
 
-            val char = findReportCharacteristic(peripheral) ?: return false
             isConnected = true
             updateDiscoveredList()
-            Timber.d("$TAG: Subscribing to GATT Report Notifications on $address")
+            Timber.d("$TAG: Connected to BLE Remote at $address! Subscribing 360° net on all characteristics...")
 
-            scope.launch {
-                try {
-                    char.subscribe().collect { bytes ->
-                        val hex = BleRemoteProtocol.bytesToHex(bytes)
-                        Timber.d("$TAG: Remote GATT notification from $address: $hex")
-                        onButtonNotification?.invoke(hex)
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "$TAG: Notification stream ended for $address")
-                }
-            }
+            subscribeToAllNotifyCharacteristics(peripheral)
 
             peripheral.state.first { it is ConnectionState.Disconnected }
             isConnected = false
@@ -195,17 +177,36 @@ class BleRemoteController(context: Context) {
         }
     }
 
-    private suspend fun findReportCharacteristic(peripheral: Peripheral): RemoteCharacteristic? {
-        for (attempt in 1..10) {
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    private fun subscribeToAllNotifyCharacteristics(peripheral: Peripheral) {
+        scope.launch {
             try {
+                delay(500) // Brief delay to let GATT service discovery complete
                 val services = peripheral.services().value
-                val service = services.firstOrNull { it.uuid == targetService } ?: services.firstOrNull()
-                val char = service?.characteristics?.firstOrNull { it.uuid == targetChar } ?: service?.characteristics?.firstOrNull()
-                if (char != null) return char
-            } catch (_: Exception) { }
-            delay(300)
+                Timber.d("$TAG: [360° Net] Discovering all GATT services on remote (${services.size} services found)")
+
+                for (service in services) {
+                    for (char in service.characteristics) {
+                        scope.launch {
+                            try {
+                                char.subscribe().collect { bytes ->
+                                    val hex = BleRemoteProtocol.bytesToHex(bytes)
+                                    // Ignore all-zero release packets
+                                    if (hex.isNotEmpty() && !hex.all { it == '0' }) {
+                                        Timber.d("$TAG: 🎯 [360° Net] Received notification on char ${char.uuid}: $hex")
+                                        onButtonNotification?.invoke(hex)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Timber.w("$TAG: Stream on char ${char.uuid} ended or failed: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "$TAG: Failed to discover and subscribe all GATT characteristics")
+            }
         }
-        return null
     }
 
     private fun updateDiscoveredList() {
