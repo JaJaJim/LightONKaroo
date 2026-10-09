@@ -147,7 +147,7 @@ class MagicshineBleController(context: Context) : LightController {
         }
     }
 
-    private fun registerFoundDevice(address: String, name: String) {
+    internal fun registerFoundDevice(address: String, name: String) {
         if (devices.containsKey(address)) return
         val peripheral = centralManager.getPeripheralsById(listOf(address)).firstOrNull() ?: run {
             Timber.w("$TAG: No peripheral for $address")

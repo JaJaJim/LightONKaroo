@@ -113,6 +113,9 @@ data class LightControllerSettings(
     val overrideActiveModes: Boolean = false,
     val simulateRadar: Boolean = false,
     val softwareThreatModeEnabled: Boolean = false,
+    val remoteDeviceAddress: String = "",
+    val remoteBoundBytesHex: String = "",
+    val remoteSniffingActive: Boolean = false,
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {

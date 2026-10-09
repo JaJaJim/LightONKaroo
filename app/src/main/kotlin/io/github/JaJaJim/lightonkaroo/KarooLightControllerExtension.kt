@@ -1,5 +1,8 @@
 package io.github.JaJaJim.lightonkaroo
 
+import android.content.Context
+import io.github.JaJaJim.lightonkaroo.ble.BleRemoteController
+import io.github.JaJaJim.lightonkaroo.ble.BleRemoteProtocol
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
@@ -64,6 +67,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     internal lateinit var karooSystem: KarooSystemService
     internal lateinit var lightControl: KarooLightControl
     internal lateinit var magicshineController: MagicshineBleController
+    internal lateinit var bleRemoteController: BleRemoteController
     private val lightControllers = mutableMapOf<LightProtocol, LightController>()
     internal lateinit var engine: LightControlEngine
     internal lateinit var repository: PreferencesRepository
@@ -87,6 +91,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private var bleStartJob: Job? = null
     private var discoveryPollingJob: Job? = null
     private var displayRotationJob: Job? = null
+    private var unifiedScanCallback: android.bluetooth.le.ScanCallback? = null
+
     @Volatile private var settingsUiActive = false
     @Volatile private var rideActive = false
     val isRideActive: Boolean get() = rideActive
@@ -105,12 +111,34 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         repository = PreferencesRepository(applicationContext)
         lightControl = KarooLightControl(applicationContext)
         magicshineController = MagicshineBleController(applicationContext)
+        bleRemoteController = BleRemoteController(applicationContext)
+
         lightControllers[LightProtocol.ANT_PLUS] = lightControl
         lightControllers[LightProtocol.BLE] = magicshineController
+
         magicshineController.onDeviceConnected = {
             stopBleIfNotNeeded()
             engine.onApplyState?.invoke(engine.activeState.value)
         }
+
+        bleRemoteController.onButtonNotification = { hexPattern ->
+            val settings = engine.settings
+            if (settings.remoteSniffingActive) {
+                val newSettings = settings.copy(
+                    remoteBoundBytesHex = hexPattern,
+                    remoteSniffingActive = false,
+                )
+                extensionScope.launch {
+                    repository.updateSettings(newSettings)
+                    engine.settings = newSettings
+                }
+                Timber.d("$TAG: Sniffed remote button pattern: $hexPattern")
+            } else if (settings.remoteBoundBytesHex.isNotEmpty() && hexPattern.startsWith(settings.remoteBoundBytesHex)) {
+                Timber.d("$TAG: Bound remote button pressed ($hexPattern)! Triggering light action...")
+                engine.onToggleLights()
+            }
+        }
+
         engine = LightControlEngine()
 
         engine.onApplyState = { state ->
@@ -263,20 +291,19 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 engine.onRideStart()
                 startDiscoveryPolling()
                 startBleIfNeeded()
-                // If any assigned BLE light is not connected upon ride start or resume, force start BLE discovery immediately!
+                bleRemoteController.startSupervisor()
                 if (!allAssignedBleConnected()) {
-                    Timber.d("$TAG: Ride recording active/resumed but BLE lights not connected. Forcing BLE discovery scan.")
+                    Timber.d("$TAG: Ride recording active/resumed but BLE lights not connected. Forcing unified BLE discovery scan.")
                     extensionScope.launch {
                         karooSystem.dispatch(RequestBluetooth(extension))
-                        magicshineController.startDiscovery()
+                        startUnifiedBleScan()
                     }
                 }
                 updateRadarMonitoring()
             }
             is RideState.Paused -> {
                 engine.onRidePause()
-                // Stop BLE discovery during pause to conserve battery
-                magicshineController.stopDiscovery()
+                stopUnifiedBleScan()
             }
             is RideState.Idle -> {
                 rideActive = false
@@ -284,7 +311,6 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 stopRadarMonitoring()
                 stopRadarSimulation()
                 engine.onRideStop()
-                // Wait 1 second for queued OFF commands to transmit over ANT+/BLE before unbinding IPC binder
                 extensionScope.launch {
                     delay(1000L)
                     if (!settingsUiActive && !rideActive) {
@@ -304,6 +330,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 settings = migrated
             }
             engine.settings = settings
+            bleRemoteController.boundAddress = settings.remoteDeviceAddress
             syncBleAssignments()
             startBleIfNeeded()
             updateRadarMonitoring()
@@ -343,11 +370,15 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     fun setSettingsUiActive(active: Boolean) {
         Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
+        magicshineController.isSettingsUiActive = active
+        bleRemoteController.isSettingsUiActive = active
+
         if (active) {
             lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
             startDisplayRotation()
+            bleRemoteController.startSupervisor()
             extensionScope.launch {
                 delay(500)
                 for (assignment in engine.settings.lightAssignments) {
@@ -394,7 +425,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.BLE }
+        engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.BLE } || engine.settings.remoteDeviceAddress.isNotEmpty()
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
@@ -407,20 +438,103 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     magicshineController.connect(id)
                 }
                 if (settingsUiActive) {
-                    Timber.d("$TAG: Starting BLE discovery")
-                    magicshineController.startDiscovery()
+                    Timber.d("$TAG: Starting single unified BLE discovery scan")
+                    startUnifiedBleScan()
                 }
             }
         }
     }
 
+    private fun startUnifiedBleScan() {
+        if (unifiedScanCallback != null) return
+        extensionScope.launch {
+            val bluetoothManager = applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            var scanner: android.bluetooth.le.BluetoothLeScanner? = null
+            for (attempt in 1..5) {
+                if (unifiedScanCallback != null) break
+                scanner = bluetoothManager?.adapter?.bluetoothLeScanner
+                if (scanner != null) break
+                delay(500L)
+            }
+            if (scanner == null || unifiedScanCallback != null) return@launch
+
+            val callback = object : android.bluetooth.le.ScanCallback() {
+                override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
+                    try {
+                        val address = result.device?.address ?: return
+                        val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: return
+                        val nameUpper = rawName.uppercase()
+
+                        val isMagicshine = nameUpper.contains("MAGICSHINE") ||
+                                           nameUpper.contains("M1") ||
+                                           nameUpper.contains("M2") ||
+                                           nameUpper.contains("M3") ||
+                                           nameUpper.contains("HORI") ||
+                                           nameUpper.contains("EVO") ||
+                                           nameUpper.contains("CBL") ||
+                                           nameUpper.contains("RAY") ||
+                                           nameUpper.contains("SEEMEE") ||
+                                           nameUpper.contains("MONTEER")
+
+                        val isRemote = BleRemoteProtocol.SUPPORTED_PREFIXES.any { nameUpper.contains(it) } ||
+                                       address == bleRemoteController.boundAddress
+
+                        if (isMagicshine) {
+                            Timber.d("$TAG: Unified BLE scan found Magicshine light: $rawName ($address)")
+                            magicshineController.registerFoundDevice(address, rawName)
+                        }
+                        if (isRemote) {
+                            Timber.d("$TAG: Unified BLE scan found Remote: $rawName ($address)")
+                            bleRemoteController.registerFoundDevice(address, rawName)
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "$TAG: Skipping unified scan result")
+                    }
+                }
+
+                override fun onScanFailed(errorCode: Int) {
+                    Timber.e("$TAG: Unified BLE scan failed: $errorCode")
+                }
+            }
+
+            try {
+                val settings = android.bluetooth.le.ScanSettings.Builder()
+                    .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .build()
+                scanner.startScan(null, settings, callback)
+                unifiedScanCallback = callback
+                Timber.d("$TAG: Single unified BLE scan started successfully")
+            } catch (e: SecurityException) {
+                Timber.e(e, "$TAG: Permission missing for BLE scan")
+            } catch (e: Exception) {
+                Timber.e(e, "$TAG: Failed to start unified BLE scan")
+            }
+        }
+    }
+
+    private fun stopUnifiedBleScan() {
+        unifiedScanCallback?.let { cb ->
+            try {
+                val bluetoothManager = applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+                bluetoothManager?.adapter?.bluetoothLeScanner?.stopScan(cb)
+            } catch (e: SecurityException) {
+                Timber.w(e, "$TAG: Permission missing to stop unified BLE scan")
+            } catch (e: Exception) {
+                Timber.w(e, "$TAG: Failed to stop unified BLE scan")
+            }
+        }
+        unifiedScanCallback = null
+        magicshineController.stopDiscovery()
+        bleRemoteController.stopDiscovery()
+    }
+
     private fun stopBleIfNotNeeded() {
         if (settingsUiActive) return
         if (!hasBleAssignments()) {
-            magicshineController.stopDiscovery()
+            stopUnifiedBleScan()
             karooSystem.dispatch(ReleaseBluetooth(extension))
-        } else if (magicshineController.allConnected(magicshineController.assignedDeviceIds)) {
-            magicshineController.stopDiscovery()
+        } else if (allAssignedBleConnected()) {
+            stopUnifiedBleScan()
         }
     }
 
@@ -836,7 +950,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 return
             }
 
-            for (assignment in engine.settings.lightAssignments) {
+            val currentProfileAssignments = engine.settings.lightAssignments
+            for (assignment in currentProfileAssignments) {
                 if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
 
                 val activeState = engine.activeState.value
@@ -875,7 +990,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 Timber.d("$TAG: Software threat CLEAR (after hold time)")
                 engine.updateDisplayInfo(engine.displayInfo.value)
 
-                for (assignment in engine.settings.lightAssignments) {
+                val currentProfileAssignments = engine.settings.lightAssignments
+                for (assignment in currentProfileAssignments) {
                     if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
                     val activeState = engine.activeState.value
                     val restoreMode = assignment.modeForState(activeState)
@@ -892,6 +1008,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         stopRadarMonitoring()
         engine.destroy()
         magicshineController.destroy()
+        bleRemoteController.destroy()
         lightControl.unbind()
         karooSystem.dispatch(ReleaseBluetooth(extension))
         karooSystem.disconnect()
