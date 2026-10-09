@@ -122,6 +122,7 @@ data class LightControllerSettings(
     val remoteSecondaryKeycode: Int = 0,
     val remoteSniffingActive: Boolean = false,
     val remoteSniffingTarget: String = "PRIMARY", // PRIMARY or SECONDARY
+    val remoteSniffingAddress: String = "",
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {
