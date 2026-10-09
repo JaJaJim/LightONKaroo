@@ -123,26 +123,31 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         bleRemoteController.onAdvertisingPacketReceived = { address, name, hexPattern ->
             val settings = engine.settings
             if (settings.remoteSniffingActive) {
-                val newSettings = if (settings.remoteSniffingTarget == "SECONDARY") {
-                    settings.copy(
-                        remoteDeviceAddress = address,
-                        remoteDeviceName = name,
-                        remoteSecondaryBytesHex = hexPattern.take(24),
-                        remoteSniffingActive = false,
-                    )
-                } else {
-                    settings.copy(
-                        remoteDeviceAddress = address,
-                        remoteDeviceName = name,
-                        remoteBoundBytesHex = hexPattern.take(24),
-                        remoteSniffingActive = false,
-                    )
+                val targetAddress = settings.remoteSniffingAddress
+                if (targetAddress.isEmpty() || address.equals(targetAddress, ignoreCase = true)) {
+                    val newSettings = if (settings.remoteSniffingTarget == "SECONDARY") {
+                        settings.copy(
+                            remoteEnabled = true,
+                            remoteDeviceAddress = address,
+                            remoteDeviceName = name,
+                            remoteSecondaryBytesHex = hexPattern.take(24),
+                            remoteSniffingActive = false,
+                        )
+                    } else {
+                        settings.copy(
+                            remoteEnabled = true,
+                            remoteDeviceAddress = address,
+                            remoteDeviceName = name,
+                            remoteBoundBytesHex = hexPattern.take(24),
+                            remoteSniffingActive = false,
+                        )
+                    }
+                    extensionScope.launch {
+                        repository.updateSettings(newSettings)
+                        engine.settings = newSettings
+                    }
+                    Timber.d("$TAG: Sniffed non-idle BLE packet for ${settings.remoteSniffingTarget}: $address ($hexPattern)")
                 }
-                extensionScope.launch {
-                    repository.updateSettings(newSettings)
-                    engine.settings = newSettings
-                }
-                Timber.d("$TAG: Sniffed raw BLE advertising packet for ${settings.remoteSniffingTarget}: $address ($hexPattern)")
             }
         }
 

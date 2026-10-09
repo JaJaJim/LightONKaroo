@@ -35,6 +35,7 @@ class BleRemoteController(context: Context) {
         private const val DEBOUNCE_MS = 300L
         private const val RECONNECT_MIN_MS = 5_000L
         private const val RECONNECT_MAX_MS = 30_000L
+        private const val IDLE_FLAG_PREFIX = "020106"
     }
 
     private val appContext = context.applicationContext
@@ -60,8 +61,14 @@ class BleRemoteController(context: Context) {
             ?.adapter?.bluetoothLeScanner
 
     fun registerFoundDevice(address: String, name: String) {
-        discoveredRemotesMap[address] = name
-        updateDiscoveredList()
+        val nameUpper = name.uppercase()
+        val isRemote = BleRemoteProtocol.SUPPORTED_PREFIXES.any { nameUpper.contains(it) } ||
+                       (boundAddress.isNotEmpty() && address.equals(boundAddress, ignoreCase = true))
+
+        if (isRemote) {
+            discoveredRemotesMap[address] = name
+            updateDiscoveredList()
+        }
     }
 
     fun startDiscovery() {
@@ -168,15 +175,18 @@ class BleRemoteController(context: Context) {
 
         registerFoundDevice(address, name)
 
-        // Delegate to Sniffing or Action listener
-        onAdvertisingPacketReceived?.invoke(address, name, bytesHex)
+        // Ignore standard background LE idle flag packets (020106...) during sniffing
+        val isIdlePacket = bytesHex.startsWith(IDLE_FLAG_PREFIX, ignoreCase = true) || bytesHex == "ADV"
+        if (!isIdlePacket) {
+            onAdvertisingPacketReceived?.invoke(address, name, bytesHex)
+        }
 
-        // Trigger action if advertisement packet matches bound remote address
-        if (boundAddress.isNotEmpty() && address.equals(boundAddress, ignoreCase = true)) {
+        // Trigger action if advertisement/GATT packet matches bound remote address
+        if (boundAddress.isNotEmpty() && address.equals(boundAddress, ignoreCase = true) && !isIdlePacket) {
             val now = System.currentTimeMillis()
             if (now - lastTriggerTimestamp > DEBOUNCE_MS) {
                 lastTriggerTimestamp = now
-                Timber.d("$TAG: ⚡ BLE Remote packet received from bound remote $address! Triggering action...")
+                Timber.d("$TAG: ⚡ BLE Remote button press packet received from bound remote $address! Triggering action...")
                 onRemoteButtonPressed?.invoke()
             }
         }
@@ -207,7 +217,6 @@ class BleRemoteController(context: Context) {
                 .build()
             scanner.startScan(null, settings, callback)
             scanCallback = callback
-            Timber.d("$TAG: BLE Remote Scanner started successfully")
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to start BLE Remote scan")
         }
