@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,15 +16,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +44,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.JaJaJim.lightonkaroo.BuildConfig
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
-import io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension
 import io.github.JaJaJim.lightonkaroo.R
 import io.github.JaJaJim.lightonkaroo.data.LightAssignment
 import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
@@ -80,6 +84,12 @@ fun SettingsScreen(
             onUpdateAssignment = onUpdateAssignment,
             onTestMode = onTestMode,
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        ConnectedRemoteSection(settings = settings, onSave = onSave)
 
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
@@ -201,6 +211,227 @@ private fun ConnectedLightsSection(
             )
             if (index < allLights.lastIndex) {
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectedRemoteSection(
+    settings: LightControllerSettings,
+    onSave: (LightControllerSettings) -> Unit,
+) {
+    Text("Connected Remote", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    Spacer(modifier = Modifier.height(8.dp))
+
+    val ext = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+    val discoveredRemotes = ext?.bleRemoteController?.discoveredRemotes?.collectAsState(initial = emptyList())?.value ?: emptyList()
+
+    val savedAddress = settings.remoteDeviceAddress
+    val savedName = if (settings.remoteDeviceName.isNotEmpty()) settings.remoteDeviceName else "Bluetooth Remote"
+
+    val allRemotes = buildList {
+        discoveredRemotes.forEach { add(it) }
+        if (savedAddress.isNotEmpty() && none { it.address == savedAddress }) {
+            add(io.github.JaJaJim.lightonkaroo.ble.DiscoveredRemote(savedAddress, savedName, connected = false))
+        }
+    }
+
+    if (allRemotes.isEmpty()) {
+        Text(
+            "No BLE remotes found. Turn on your Bluetooth camera shutter or media remote to discover.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        allRemotes.forEachIndexed { index, remote ->
+            val isBound = settings.remoteDeviceAddress == remote.address
+            RemoteCard(
+                remote = remote,
+                isBound = isBound,
+                settings = settings,
+                onSave = onSave,
+            )
+            if (index < allRemotes.lastIndex) {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteCard(
+    remote: io.github.JaJaJim.lightonkaroo.ble.DiscoveredRemote,
+    isBound: Boolean,
+    settings: LightControllerSettings,
+    onSave: (LightControllerSettings) -> Unit,
+) {
+    val enabled = isBound
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = if (remote.connected) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .background(
+                if (enabled) Color(0xFF32E09A).copy(alpha = 0.25f) else Color(0xFFD34343).copy(alpha = 0.25f),
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Line 1: Remote Name; Line 2: Subtitle
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = remote.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            val statusText = if (remote.connected) "Connected" else "Not found"
+            Text(
+                text = "BLE Remote · $statusText",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Line 3: "Slide to activate" + Switch
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Slide to activate",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+
+            Switch(
+                checked = enabled,
+                onCheckedChange = { active ->
+                    if (active) {
+                        onSave(
+                            settings.copy(
+                                remoteDeviceAddress = remote.address,
+                                remoteDeviceName = remote.name,
+                            ),
+                        )
+                        io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.let { ext ->
+                            ext.bleRemoteController.boundAddress = remote.address
+                            ext.bleRemoteController.startSupervisor()
+                        }
+                    } else {
+                        onSave(
+                            settings.copy(
+                                remoteDeviceAddress = "",
+                                remoteDeviceName = "",
+                                remoteBoundBytesHex = "",
+                                remoteSecondaryBytesHex = "",
+                                remoteSniffingActive = false,
+                            ),
+                        )
+                        io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.let { ext ->
+                            ext.bleRemoteController.boundAddress = ""
+                        }
+                    }
+                },
+            )
+        }
+
+        if (enabled) {
+            HorizontalDivider()
+
+            // Primary Button Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Primary Button (ON / Toggle)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    val statusText = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY") {
+                        "🔴 Sniffing... Press button on remote!"
+                    } else if (settings.remoteBoundBytesHex.isNotEmpty()) {
+                        "🟢 Bound (${settings.remoteBoundBytesHex})"
+                    } else {
+                        "⚪ Not bound"
+                    }
+                    Text(
+                        statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY") Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val isCurrentSniffing = settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY"
+                        onSave(
+                            settings.copy(
+                                remoteSniffingActive = !isCurrentSniffing,
+                                remoteSniffingTarget = "PRIMARY",
+                            ),
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY") Color.Red else MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Text(if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "PRIMARY") "Cancel" else "Sniff Button")
+                }
+            }
+
+            // Secondary Button Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Secondary Button (Janus / OFF)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    val statusText = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY") {
+                        "🔴 Sniffing... Press button on remote!"
+                    } else if (settings.remoteSecondaryBytesHex.isNotEmpty()) {
+                        "🟢 Bound (${settings.remoteSecondaryBytesHex})"
+                    } else {
+                        "⚪ Not bound"
+                    }
+                    Text(
+                        statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY") Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val isCurrentSniffing = settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY"
+                        onSave(
+                            settings.copy(
+                                remoteSniffingActive = !isCurrentSniffing,
+                                remoteSniffingTarget = "SECONDARY",
+                            ),
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY") Color.Red else MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Text(if (settings.remoteSniffingActive && settings.remoteSniffingTarget == "SECONDARY") "Cancel" else "Sniff Button")
+                }
             }
         }
     }
@@ -395,25 +626,15 @@ private fun SoftwareThreatModeSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        var threatHoldSlider by remember(settings.threatHoldTimeSeconds) { mutableStateOf(settings.threatHoldTimeSeconds.toFloat()) }
-        Column {
-            Text(
-                "Threat Hold Time: ${threatHoldSlider.toInt()}s",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = threatHoldSlider,
-                onValueChange = { threatHoldSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(threatHoldTimeSeconds = threatHoldSlider.toInt())) },
-                valueRange = 0f..5f,
-                steps = 4, // 0, 1, 2, 3, 4, 5
-            )
-        }
+        StepperSlider(
+            label = "Threat Hold Time",
+            subtitle = "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
+            value = settings.threatHoldTimeSeconds,
+            range = 0..5,
+            step = 1,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(threatHoldTimeSeconds = it)) },
+        )
     }
 }
 
@@ -502,20 +723,14 @@ private fun RideControlSection(
 
     if (settings.showDetailedStatus) {
         Spacer(modifier = Modifier.height(16.dp))
-        var rotationSpeedSlider by remember(settings.rotationSpeedSeconds) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
-        Column {
-            Text(
-                "Rotation Speed: ${rotationSpeedSlider.toInt()}s",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = rotationSpeedSlider,
-                onValueChange = { rotationSpeedSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(rotationSpeedSeconds = rotationSpeedSlider.toInt())) },
-                valueRange = 5f..30f,
-                steps = 4, // 5, 10, 15, 20, 25, 30
-            )
-        }
+        StepperSlider(
+            label = "Rotation Speed",
+            value = settings.rotationSpeedSeconds,
+            range = 5..30,
+            step = 5,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(rotationSpeedSeconds = it)) },
+        )
     }
 }
 
@@ -541,18 +756,97 @@ private fun DataFieldAppearanceSection(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    var glowIntensitySlider by remember(settings.glowIntensity) { mutableStateOf(settings.glowIntensity.toFloat()) }
-    Column {
-        Text(
-            "Ambient Side-Glow Intensity: ${glowIntensitySlider.toInt()}",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    StepperSlider(
+        label = "Ambient Side-Glow Intensity",
+        value = settings.glowIntensity,
+        range = 0..5,
+        step = 1,
+        unit = "",
+        onSaveValue = { onSave(settings.copy(glowIntensity = it)) },
+    )
+}
+
+@Composable
+private fun StepperSlider(
+    label: String,
+    subtitle: String? = null,
+    value: Int,
+    range: IntRange,
+    step: Int = 1,
+    unit: String = "",
+    onSaveValue: (Int) -> Unit,
+) {
+    var currentValue by remember(value) { mutableStateOf(value.coerceIn(range.first, range.last)) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue - step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("-", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                Text(
+                    if (unit.isNotEmpty()) "${currentValue}$unit" else "$currentValue",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue + step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("+", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         Slider(
-            value = glowIntensitySlider,
-            onValueChange = { glowIntensitySlider = it },
-            onValueChangeFinished = { onSave(settings.copy(glowIntensity = glowIntensitySlider.toInt())) },
-            valueRange = 0f..5f,
-            steps = 4, // 0, 1, 2, 3, 4, 5
+            value = currentValue.toFloat(),
+            onValueChange = { currentValue = it.toInt() },
+            onValueChangeFinished = { onSaveValue(currentValue) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = if (((range.last - range.first) / step) > 1) ((range.last - range.first) / step) - 1 else 0,
         )
     }
 }
@@ -703,7 +997,7 @@ private fun LightCard(
                 },
             )
 
-            val refresh: () -> Unit = { KarooLightControllerExtension.getInstance()?.lightControl?.forceRefreshLightParameters(light.id) }
+            val refresh: () -> Unit = { io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.lightControl?.forceRefreshLightParameters(light.id) }
 
             ModeRow(
                 label = "Primary ON Mode",

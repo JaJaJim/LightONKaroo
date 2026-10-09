@@ -124,17 +124,31 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         bleRemoteController.onButtonNotification = { hexPattern ->
             val settings = engine.settings
             if (settings.remoteSniffingActive) {
-                val newSettings = settings.copy(
-                    remoteBoundBytesHex = hexPattern,
-                    remoteSniffingActive = false,
-                )
+                val newSettings = if (settings.remoteSniffingTarget == "SECONDARY") {
+                    settings.copy(
+                        remoteSecondaryBytesHex = hexPattern,
+                        remoteSniffingActive = false,
+                    )
+                } else {
+                    settings.copy(
+                        remoteBoundBytesHex = hexPattern,
+                        remoteSniffingActive = false,
+                    )
+                }
                 extensionScope.launch {
                     repository.updateSettings(newSettings)
                     engine.settings = newSettings
                 }
-                Timber.d("$TAG: Sniffed remote button pattern: $hexPattern")
+                Timber.d("$TAG: Sniffed remote button pattern for ${settings.remoteSniffingTarget}: $hexPattern")
+            } else if (settings.remoteSecondaryBytesHex.isNotEmpty() && hexPattern.startsWith(settings.remoteSecondaryBytesHex)) {
+                Timber.d("$TAG: Secondary remote button pressed ($hexPattern)! Triggering Janus mode / Secondary toggle...")
+                if (settings.threeModeEnabled) {
+                    engine.onApplyState?.invoke(2)
+                } else {
+                    engine.onApplyHardwareOff?.invoke()
+                }
             } else if (settings.remoteBoundBytesHex.isNotEmpty() && hexPattern.startsWith(settings.remoteBoundBytesHex)) {
-                Timber.d("$TAG: Bound remote button pressed ($hexPattern)! Triggering light action...")
+                Timber.d("$TAG: Primary remote button pressed ($hexPattern)! Triggering Primary light toggle...")
                 engine.onToggleLights()
             }
         }

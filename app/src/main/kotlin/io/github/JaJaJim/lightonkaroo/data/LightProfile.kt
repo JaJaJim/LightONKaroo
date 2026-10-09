@@ -114,8 +114,11 @@ data class LightControllerSettings(
     val simulateRadar: Boolean = false,
     val softwareThreatModeEnabled: Boolean = false,
     val remoteDeviceAddress: String = "",
+    val remoteDeviceName: String = "",
     val remoteBoundBytesHex: String = "",
+    val remoteSecondaryBytesHex: String = "",
     val remoteSniffingActive: Boolean = false,
+    val remoteSniffingTarget: String = "PRIMARY", // PRIMARY or SECONDARY
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {
