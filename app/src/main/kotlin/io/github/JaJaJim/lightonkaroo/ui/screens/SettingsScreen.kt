@@ -847,30 +847,7 @@ private fun LightCard(
 
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
                 val igpConfig = igpController?.getDeviceConfig(light.id)
-                var autoDimming by remember(light.id) { mutableStateOf(igpConfig?.autoDimmingEnabled ?: false) }
                 var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Enable Light Sensor Auto-Dimming", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Automatically adjusts brightness based on ambient light sensor",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = autoDimming,
-                        onCheckedChange = { active ->
-                            autoDimming = active
-                            igpController?.setAutoDimming(light.id, active)
-                        },
-                    )
-                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -901,6 +878,7 @@ private fun LightCard(
                     var highBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
                     var lowBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
                     var patternType by remember(light.id, slot) { mutableStateOf(0) } // 0: Steady, 1: Flash, 2: Breath
+                    var slotAutoDim by remember(light.id, slot) { mutableStateOf(false) }
 
                     Column(
                         modifier = Modifier
@@ -910,6 +888,21 @@ private fun LightCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text("Custom $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Enable Auto-Dimming", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Switch(
+                                checked = slotAutoDim,
+                                onCheckedChange = { active ->
+                                    slotAutoDim = active
+                                    igpController?.setAutoDimmingForSlot(light.id, slot, active)
+                                },
+                            )
+                        }
 
                         InlineDropdown(
                             label = "Pattern Type",

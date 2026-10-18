@@ -57,33 +57,28 @@ object IgpsportProtocol {
 }
 
 data class IgpsportDeviceConfig(
-    val autoDimmingEnabled: Boolean = false,
+    val custom1AutoDimming: Boolean = false,
+    val custom2AutoDimming: Boolean = false,
+    val custom3AutoDimming: Boolean = false,
     val lowBatterySaveEnabled: Boolean = false,
-    val custom1HighBeam: Int = 100,
-    val custom1LowBeam: Int = 100,
-    val custom2HighBeam: Int = 50,
-    val custom2LowBeam: Int = 50,
-    val custom3HighBeam: Int = 25,
-    val custom3LowBeam: Int = 25,
 ) : LightModeProvider {
 
     override fun availableModes(): List<LightModeOption> = listOf(
         LightModeOption("OFF", "Off"),
-        LightModeOption("HIGH", "High"),
-        LightModeOption("LOW", "Low"),
-        LightModeOption("FLASH", "Flash"),
         LightModeOption("CUSTOM_1", "Custom 1"),
         LightModeOption("CUSTOM_2", "Custom 2"),
         LightModeOption("CUSTOM_3", "Custom 3"),
     )
 
-    fun buildCommand(modeId: String, autoDimming: Boolean = false): ByteArray? {
+    fun isAutoDimmingForMode(modeId: String): Boolean = when (modeId.uppercase()) {
+        "CUSTOM_1", "CUSTOM1", "C1" -> custom1AutoDimming
+        "CUSTOM_2", "CUSTOM2", "C2" -> custom2AutoDimming
+        "CUSTOM_3", "CUSTOM3", "C3" -> custom3AutoDimming
+        else -> false
+    }
+
+    fun buildCommand(modeId: String): ByteArray? {
         val modeCode = when (modeId.uppercase()) {
-            "HIGH", "STEADY_100", "STEADY_HIGH" -> 1
-            "MID", "STEADY_50", "STEADY_MID" -> 2
-            "LOW", "STEADY_25", "STEADY_LOW" -> 3
-            "FLASH_HI", "FLASH", "FLASH_100" -> 4
-            "FLASH_LO", "FLASH_50" -> 5
             "CUSTOM_1", "CUSTOM1", "C1" -> 64
             "CUSTOM_2", "CUSTOM2", "C2" -> 65
             "CUSTOM_3", "CUSTOM3", "C3" -> 66

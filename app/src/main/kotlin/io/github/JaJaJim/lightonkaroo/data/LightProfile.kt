@@ -61,9 +61,6 @@ object AntPlusModeProvider : LightModeProvider {
 object IgpsportDeviceModeProvider : LightModeProvider {
     override fun availableModes(): List<LightModeOption> = listOf(
         LightModeOption("OFF", "Off"),
-        LightModeOption("HIGH", "High"),
-        LightModeOption("LOW", "Low"),
-        LightModeOption("FLASH", "Flash"),
         LightModeOption("CUSTOM_1", "Custom 1"),
         LightModeOption("CUSTOM_2", "Custom 2"),
         LightModeOption("CUSTOM_3", "Custom 3"),

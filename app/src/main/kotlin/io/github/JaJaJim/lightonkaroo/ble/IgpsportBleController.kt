@@ -301,24 +301,41 @@ class IgpsportBleController(context: Context) : LightController {
 
     private fun parseNotification(address: String, data: ByteArray) {
         if (data.size < 4) return
+
+        // 1. Direct byte check for simple battery frame (0xAA 0x03 0x01 ...)
         if (data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
             val battery = data[3].toInt() and 0xFF
             if (battery in 0..100) {
                 batteryLevels[address] = battery
                 updateDiscoveredLights()
+                return
             }
+        }
+
+        // 2. Protobuf transport frame check (TYPE_DATA 0x01 / TYPE_STATE 0x03)
+        val update = IgpsProtocol.parseFrame(data)
+        val battery = update?.batteryPercent ?: update?.auxBatteryPercent
+        if (battery != null && battery in 0..100) {
+            Timber.d("$TAG: 🔋 Received battery update for iGPSPORT $address: $battery%")
+            batteryLevels[address] = battery
+            updateDiscoveredLights()
         }
     }
 
     override fun setMode(deviceId: String, modeName: String) {
         val config = getDeviceConfig(deviceId)
-        val frame = config.buildCommand(modeName, config.autoDimmingEnabled)
+        val frame = config.buildCommand(modeName)
         if (frame == null) {
             Timber.w("$TAG: Unknown mode: $modeName for iGPSPORT device $deviceId")
             return
         }
-        val chunks = IgpsProtocol.chunks(frame)
-        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${chunks.size} chunks: ${IgpsportProtocol.bytesToHex(frame)}")
+
+        val autoDimForMode = config.isAutoDimmingForMode(modeName)
+        val dimFrame = IgpsportProtocol.buildAutoDimmingCommand(autoDimForMode)
+        val combinedFrame = frame + dimFrame
+
+        val chunks = IgpsProtocol.chunks(combinedFrame)
+        Timber.d("$TAG: setMode($deviceId, $modeName, autoDim=$autoDimForMode) -> ${chunks.size} chunks: ${IgpsportProtocol.bytesToHex(combinedFrame)}")
         scope.launch {
             for (chunk in chunks) {
                 writeBytes(deviceId, chunk)
@@ -327,9 +344,14 @@ class IgpsportBleController(context: Context) : LightController {
         }
     }
 
-    fun setAutoDimming(address: String, enabled: Boolean) {
+    fun setAutoDimmingForSlot(address: String, slotNumber: Int, enabled: Boolean) {
         val config = getDeviceConfig(address)
-        deviceConfigs[address] = config.copy(autoDimmingEnabled = enabled)
+        val updatedConfig = when (slotNumber) {
+            1 -> config.copy(custom1AutoDimming = enabled)
+            2 -> config.copy(custom2AutoDimming = enabled)
+            else -> config.copy(custom3AutoDimming = enabled)
+        }
+        deviceConfigs[address] = updatedConfig
         val command = IgpsportProtocol.buildAutoDimmingCommand(enabled)
         scope.launch {
             val chunks = IgpsProtocol.chunks(command)
