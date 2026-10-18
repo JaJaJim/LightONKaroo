@@ -1,14 +1,10 @@
 package io.github.JaJaJim.lightonkaroo.ble
 
-import android.bluetooth.BluetoothManager
-import android.bluetooth.le.BluetoothLeScanner
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.light.LightController
+import io.github.JaJaJim.lightonkaroo.protocol.IgpsProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,8 +38,8 @@ class IgpsportBleController(context: Context) : LightController {
         private const val TAG = "IgpsportBle"
         private const val WRITE_RETRIES = 5
         private const val WRITE_RETRY_DELAY_MS = 60L
-        private const val RECONNECT_MIN_MS = 10_000L
-        private const val RECONNECT_MAX_MS = 60_000L
+        private const val RECONNECT_MIN_MS = 5_000L
+        private const val RECONNECT_MAX_MS = 30_000L
     }
 
     private val appContext = context.applicationContext
@@ -51,8 +47,10 @@ class IgpsportBleController(context: Context) : LightController {
     private val centralManager by lazy { CentralManager.native(appContext, scope) }
     private val writeMutex = Mutex()
 
-    private val targetService = Uuid.parse(IgpsportProtocol.SERVICE_UUID)
-    private val targetChar = Uuid.parse(IgpsportProtocol.CHARACTERISTIC_UUID)
+    private val nordicUartService = Uuid.parse(IgpsProtocol.UART_SERVICE) // 6e400001-b5a3-f393-e0a9-e50e24dcca9e
+    private val nordicUartWrite = Uuid.parse(IgpsProtocol.UART_WRITE)     // 6e400002-b5a3-f393-e0a9-e50e24dcca9e
+    private val legacyService = Uuid.parse("0000FF12-0000-1000-8000-00805f9b34fb")
+    private val legacyWrite = Uuid.parse("0000FF01-0000-1000-8000-00805f9b34fb")
 
     private data class BleDevice(val peripheral: Peripheral, val name: String)
 
@@ -72,11 +70,11 @@ class IgpsportBleController(context: Context) : LightController {
         return deviceConfigs.getOrPut(address) { IgpsportDeviceConfig() }
     }
 
-    private var scanCallback: ScanCallback? = null
+    private var scanCallback: android.bluetooth.le.ScanCallback? = null
     private val connectionJobs = ConcurrentHashMap<String, Job>()
 
-    private val bleScanner: BluetoothLeScanner?
-        get() = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)
+    private val bleScanner: android.bluetooth.le.BluetoothLeScanner?
+        get() = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)
             ?.adapter?.bluetoothLeScanner
 
     fun startDiscovery() {
@@ -96,18 +94,20 @@ class IgpsportBleController(context: Context) : LightController {
         }
     }
 
-    private fun executeBleScan(scanner: BluetoothLeScanner) {
+    private fun executeBleScan(scanner: android.bluetooth.le.BluetoothLeScanner) {
         if (scanCallback != null) return
-        val callback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
+        val callback = object : android.bluetooth.le.ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                 try {
                     val address = result.device?.address ?: return
                     if (devices.containsKey(address)) return
 
-                    val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: return
+                    val rawName = result.scanRecord?.deviceName ?: result.device?.name ?: return
                     val nameUpper = rawName.uppercase()
 
-                    val isIgpsport = IgpsportProtocol.SUPPORTED_PREFIXES.any { nameUpper.contains(it) } ||
+                    if (nameUpper.contains("MAGICSHINE") || nameUpper.contains("HORI") || nameUpper.contains("M1") || nameUpper.contains("M2")) return
+
+                    val isIgpsport = nameUpper.contains("VS") || nameUpper.contains("IGP") || nameUpper.contains("IGPSPORT") ||
                                      address in assignedDeviceIds
 
                     if (isIgpsport) {
@@ -124,8 +124,8 @@ class IgpsportBleController(context: Context) : LightController {
             }
         }
         try {
-            val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            val settings = android.bluetooth.le.ScanSettings.Builder()
+                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build()
             scanner.startScan(null, settings, callback)
             scanCallback = callback
@@ -196,7 +196,7 @@ class IgpsportBleController(context: Context) : LightController {
         deviceConfigs.putIfAbsent(address, IgpsportDeviceConfig())
 
         return try {
-            Timber.d("$TAG: Connecting to iGPSPORT light at $address")
+            Timber.d("$TAG: Connecting to iGPSPORT light at $address ($name)")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
                 retry = 2,
@@ -219,11 +219,11 @@ class IgpsportBleController(context: Context) : LightController {
 
             val characteristic = findTargetCharacteristic(peripheral)
             if (characteristic == null) {
-                Timber.w("$TAG: Characteristic not found for iGPSPORT light $address")
+                Timber.w("$TAG: Writable characteristic not found for iGPSPORT light $address")
                 return false
             }
             characteristics[address] = characteristic
-            Timber.d("$TAG: Connected to iGPSPORT light $address, characteristic found")
+            Timber.d("$TAG: Connected to iGPSPORT light $address ($name), characteristic found")
 
             scope.launch {
                 try {
@@ -253,10 +253,34 @@ class IgpsportBleController(context: Context) : LightController {
         for (attempt in 1..10) {
             try {
                 val services = peripheral.services().value
-                val service = services.firstOrNull { it.uuid == targetService }
-                val characteristic = service?.characteristics?.firstOrNull { it.uuid == targetChar }
-                if (characteristic != null) return characteristic
-            } catch (_: Exception) { }
+
+                // 1. Primary: Nordic UART Service (VS1800S)
+                val nordicService = services.firstOrNull { it.uuid == nordicUartService }
+                val nordicChar = nordicService?.characteristics?.firstOrNull { it.uuid == nordicUartWrite }
+                if (nordicChar != null) {
+                    Timber.d("$TAG: Found Nordic UART characteristic (VS1800S) for ${peripheral.name}")
+                    return nordicChar
+                }
+
+                // 2. Secondary: Legacy Service 0xFF12 (VS1200S / VS800 / VS500)
+                val legService = services.firstOrNull { it.uuid == legacyService }
+                val legChar = legService?.characteristics?.firstOrNull { it.uuid == legacyWrite }
+                if (legChar != null) {
+                    Timber.d("$TAG: Found Legacy 0xFF12 characteristic (VS1200S) for ${peripheral.name}")
+                    return legChar
+                }
+
+                // 3. Fallback: First writable characteristic across any service
+                for (service in services) {
+                    val fallbackChar = service.characteristics.firstOrNull()
+                    if (fallbackChar != null) {
+                        Timber.d("$TAG: Found Fallback GATT characteristic (${fallbackChar.uuid}) for ${peripheral.name}")
+                        return fallbackChar
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "$TAG: Error discovering GATT characteristics for ${peripheral.name}")
+            }
             delay(360)
         }
         return null
