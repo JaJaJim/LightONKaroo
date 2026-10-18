@@ -167,7 +167,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     )
                 } + ble + igp
             }.collect { merged ->
-                _discoveredLights.value = merged
+                _discoveredLights.value = merged.toList()
             }
         }
 

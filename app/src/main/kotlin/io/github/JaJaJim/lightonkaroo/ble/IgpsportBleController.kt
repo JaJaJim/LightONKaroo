@@ -300,7 +300,7 @@ class IgpsportBleController(context: Context) : LightController {
     }
 
     private fun updateDiscoveredLights() {
-        _discoveredLights.value = devices.map { (address, device) ->
+        val newList = devices.map { (address, device) ->
             DiscoveredLight(
                 id = address,
                 name = device.name,
@@ -310,7 +310,8 @@ class IgpsportBleController(context: Context) : LightController {
                 batteryPercent = null, // Disconnected from data field
                 rawBatteryHex = batteryLevelsRaw[address],
             )
-        }
+        }.toList()
+        _discoveredLights.value = newList
     }
 
     private fun parseNotification(address: String, data: ByteArray) {
