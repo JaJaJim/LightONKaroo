@@ -844,7 +844,15 @@ private fun LightCard(
                 }
             }
 
-            if (light.protocol == LightProtocol.IGPSPORT_BLE || light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
+            val isIgpsport = light.protocol == LightProtocol.IGPSPORT_BLE ||
+                             light.manufacturer?.uppercase() == "IGPSPORT" ||
+                             light.name.uppercase().contains("VS") ||
+                             light.name.uppercase().contains("IGP") ||
+                             assignment?.deviceName?.uppercase()?.contains("VS") == true ||
+                             assignment?.deviceName?.uppercase()?.contains("IGP") == true ||
+                             assignment?.protocol == LightProtocol.IGPSPORT_BLE
+
+            if (isIgpsport) {
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
                 val igpConfig = igpController?.getDeviceConfig(light.id)
                 var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
@@ -883,7 +891,7 @@ private fun LightCard(
                 }
 
                 HorizontalDivider()
-                var showCustomProfiles by remember(light.id) { mutableStateOf(false) }
+                var showCustomProfiles by remember(light.id) { mutableStateOf(true) }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
