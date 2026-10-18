@@ -84,10 +84,49 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **KAROO PROFILE EDITOR COMPATIBILITY**: 100% gesture release during profile editing.
 
 ### v0.1.4-R2 "Threat"
-- **NEW**: Automatic Update Compatibility with versionCode 20 and -R2 release revision format.
+- **NEW**: Automatic Update Compatibility: Enhanced versioning (`versionCode 20` and `-R2` release revision format) for seamless Karoo Extension Manager update detection.
 
 ### v0.1.4 "Threat"
-- **NEW**: Software Threat Mode with radar warning lighting and physical light confirmation.
+- **NEW**: Software Threat Mode: Automatic radar-triggered warning lighting for ANT+ radars.
+- **NEW**: Interactive Radar Simulator: Offline test loop simulating real FIT vehicle approach events for indoor testing.
+- **NEW**: Physical Light Confirmation: Radar status icon verifies live ANT+ mode feedback (Turquoise when confirmed, White when waiting).
+- **NEW**: Automatic Ride BLE Discovery & Auto-Connect: Background Bluetooth discovery and auto-reconnection during active rides when the data field is active, supporting Magicshine, Hori, Evo, CBL, and Seemee devices.
+- **PERFORMANCE**: Sequential Command Queue with 250ms spacing and 150ms debounce guard to eliminate ANT+ packet collisions and binder load.
+- **PERFORMANCE**: Smart Diffing for zero CPU overhead during stable state rotations.
+- **FIX**: Guaranteed 1-second unbind delay ensuring reliable "Truly turn OFF" behavior on ride end.
+
+### v0.1.2-R2 "Janus"
+- **NEW**: Customizable "Side-Glow" effect with intensity slider (Stiffness/Punch).
+- **NEW**: Option to hide/show the background logo for a minimalist look.
+- **UI**: Authentic Karoo colors (Turquoise #32e09a, Yellow #ffe714, Red #d34343).
+- **UI**: Improved battery icons (Full for Good, Half for Medium, Empty for Low).
+- **FIX**: Adjusted lamp icon position and font size for better small-field fit.
+
+### v0.1.2
+- **NEW**: Split-Field Control (Janus Mode). Left side toggles Primary/Secondary, Right side turns OFF.
+- **NEW**: Added "Secondary ON Mode" configuration for every light.
+- **NEW**: Customizable "Ride Pause Behavior" (None, OFF, Primary, Secondary, Hard-OFF).
+- **NEW**: Smart Resume: Automatically restores the light mode used before the pause.
+- **NEW**: Custom nickname selection to fix Karoo's naming limitations.
+- **NEW**: Rotation speed slider (5s to 30s steps) in settings.
+- **UI**: Authentic Karoo Turquoise (#27D9B4) and high-contrast Yellow status labels.
+- **UI**: Dynamic battery icons (Full for Good, Half for Medium, Empty for Low).
+- **UI**: Top-left lamp status indicator.
+- **FIX**: Resolved "black screen" issues by simplifying the layout.
+
+### v0.1.0-alpha
+- Initial major alpha release with View-Aware logic and Radar fallback.
+
+### v0.0.3
+- Added configurable OFF-Mode.
+- Added status rotation and color-coding.
+- Improved SVG rendering and centering for custom logo.
+- Intelligent battery fallback: Rear lights can now pull data from linked Radar.
+
+### v0.0.2
+- Initial fork and rebranding.
+- Integrated custom logo.
+- Simplified manual control logic.
 
 ## 📜 License & Credits
 - Licensed under the **MIT License**.
