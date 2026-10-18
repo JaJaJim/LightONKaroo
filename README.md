@@ -79,9 +79,9 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **Pure English UI**: Standardized all UI labels to clean English.
 
 ### v0.1.4-R3 "Threat"
-- **iGPSPORT SMART LIGHT INTEGRATION**: Initial iGPSPORT BLE stack support based on [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) library by Tiago Fontes Dias.
 - **UI MODERNIZATION**: In-Card expanding light cards with Slide-to-Activate and high-contrast styling.
 - **ADVANCED LIGHT MODES**: 100% dynamic passthrough of all ANT+ modes reported by Karoo OS with on-demand refresh.
+- **KAROO PROFILE EDITOR COMPATIBILITY**: 100% gesture release during profile editing.
 
 ### v0.1.4-R2 "Threat"
 - **NEW**: Automatic Update Compatibility with versionCode 20 and -R2 release revision format.
