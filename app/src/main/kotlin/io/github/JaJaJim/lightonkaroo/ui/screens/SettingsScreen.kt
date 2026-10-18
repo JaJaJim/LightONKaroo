@@ -849,11 +849,13 @@ private fun LightCard(
                 val igpConfig = igpController?.getDeviceConfig(light.id)
                 var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
 
-                val nameUpper = light.name.uppercase()
-                val isVs1800 = nameUpper.contains("1800")
+                val nameUpper = ((assignment?.deviceName ?: "") + " " + light.name).uppercase()
+                val isExplicitSingleBeam = nameUpper.contains("1200") || nameUpper.contains("800") || nameUpper.contains("500")
+                val isDualBeam = !isExplicitSingleBeam
                 val isVs500 = nameUpper.contains("500")
+                val hasLightSensor = !isVs500
 
-                if (!isVs500) {
+                if (hasLightSensor) {
                     HorizontalDivider()
                     Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
@@ -920,7 +922,7 @@ private fun LightCard(
                         ) {
                             Text("Custom Slot $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
 
-                            if (!isVs500) {
+                            if (hasLightSensor) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -947,7 +949,7 @@ private fun LightCard(
                                 ),
                                 onSelected = { selected ->
                                     patternType = selected.toIntOrNull() ?: 0
-                                    if (isVs1800) {
+                                    if (isDualBeam) {
                                         igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
                                     } else {
                                         igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
@@ -955,7 +957,7 @@ private fun LightCard(
                                 },
                             )
 
-                            if (isVs1800) {
+                            if (isDualBeam) {
                                 StepperSlider(
                                     label = "High Beam",
                                     value = highBeamPct,
