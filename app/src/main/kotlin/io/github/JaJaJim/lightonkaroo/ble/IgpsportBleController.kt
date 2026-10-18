@@ -237,17 +237,28 @@ class IgpsportBleController(context: Context) : LightController {
         return deviceIds.all { characteristics.containsKey(it) }
     }
 
+    private fun resolveConfirmedName(address: String, peripheralName: String?): String {
+        val existing = devices[address]?.name
+        if (!existing.isNullOrEmpty() && existing != "iGPSPORT Light" && existing != "iGPSPORT") {
+            return existing
+        }
+        if (!peripheralName.isNullOrEmpty() && peripheralName != "iGPSPORT Light" && peripheralName != "iGPSPORT") {
+            return peripheralName
+        }
+        return "iGPSPORT Light"
+    }
+
     private suspend fun attemptConnect(address: String): Boolean {
         val peripheral = devices[address]?.peripheral
             ?: centralManager.getPeripheralsById(listOf(address)).firstOrNull()
             ?: return false
-        val name = devices[address]?.name ?: peripheral.name ?: "iGPSPORT Light"
-        devices.putIfAbsent(address, BleDevice(peripheral, name))
+        val confirmedName = resolveConfirmedName(address, peripheral.name)
+        devices[address] = BleDevice(peripheral, confirmedName)
         deviceConfigs.putIfAbsent(address, IgpsportDeviceConfig())
 
         return try {
             stopDiscovery()
-            Timber.d("$TAG: Connecting to iGPSPORT light at $address ($name)")
+            Timber.d("$TAG: Connecting to iGPSPORT light at $address ($confirmedName)")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
                 retry = 2,
@@ -270,7 +281,28 @@ class IgpsportBleController(context: Context) : LightController {
 
             val (writeChar, notifyChar) = findGattCharacteristics(peripheral) ?: return false
             characteristics[address] = writeChar
-            Timber.d("$TAG: Connected to iGPSPORT light $address ($name), write & notify characteristics ready")
+            Timber.d("$TAG: Connected to iGPSPORT light $address ($confirmedName), write & notify characteristics ready")
+
+            scope.launch {
+                try {
+                    val gapServiceUuid = java.util.UUID.fromString("00001800-0000-1000-8000-00805f9b34fb")
+                    val devNameUuid = java.util.UUID.fromString("00002a00-0000-1000-8000-00805f9b34fb")
+                    val services = peripheral.services().value
+                    val gapService = services.firstOrNull { it.uuid == gapServiceUuid }
+                    val nameChar = gapService?.characteristics?.firstOrNull { it.uuid == devNameUuid }
+                    if (nameChar != null) {
+                        val nameBytes = nameChar.read()
+                        val gattName = String(nameBytes, Charsets.UTF_8).trim()
+                        if (gattName.isNotEmpty() && gattName != "iGPSPORT Light" && gattName != "iGPSPORT") {
+                            Timber.d("$TAG: Read hardware GATT device name for $address: '$gattName'")
+                            devices[address] = BleDevice(peripheral, gattName)
+                            updateDiscoveredLights()
+                        }
+                    }
+                } catch (_: Exception) {
+                    Timber.d("$TAG: Optional GATT device name read skipped for $address")
+                }
+            }
 
             val notifyJob = scope.launch {
                 try {

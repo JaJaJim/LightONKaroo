@@ -207,6 +207,17 @@ private fun ConnectedLightsSection(
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+            onClick = {
+                onUpdateAssignment("", null) // Reset light assignments
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Reset All Light Settings to Default", color = MaterialTheme.colorScheme.onErrorContainer)
+        }
     }
 }
 
