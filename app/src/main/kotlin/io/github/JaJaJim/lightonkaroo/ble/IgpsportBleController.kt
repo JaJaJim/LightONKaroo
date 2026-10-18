@@ -4,7 +4,6 @@ import android.content.Context
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.light.LightController
-import io.github.JaJaJim.lightonkaroo.protocol.FrameAssembler
 import io.github.JaJaJim.lightonkaroo.protocol.IgpsProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,8 +58,7 @@ class IgpsportBleController(context: Context) : LightController {
     private val devices = ConcurrentHashMap<String, BleDevice>()
     private val characteristics = ConcurrentHashMap<String, RemoteCharacteristic>()
     private val deviceConfigs = ConcurrentHashMap<String, IgpsportDeviceConfig>()
-    private val batteryLevels = ConcurrentHashMap<String, Int>()
-    private val assemblers = ConcurrentHashMap<String, FrameAssembler>()
+    private val batteryLevelsRaw = ConcurrentHashMap<String, String>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
@@ -79,6 +77,13 @@ class IgpsportBleController(context: Context) : LightController {
     private val bleScanner: android.bluetooth.le.BluetoothLeScanner?
         get() = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)
             ?.adapter?.bluetoothLeScanner
+
+    fun queryRawBattery(address: String) {
+        scope.launch {
+            Timber.d("$TAG: Querying raw battery for $address...")
+            writeBytes(address, IgpsProtocol.readBattery())
+        }
+    }
 
     fun startDiscovery() {
         if (scanCallback != null) return
@@ -182,7 +187,7 @@ class IgpsportBleController(context: Context) : LightController {
     fun disconnect(address: String) {
         connectionJobs.remove(address)?.cancel()
         characteristics.remove(address)
-        assemblers.remove(address)
+        batteryLevelsRaw.remove(address)
         updateDiscoveredLights()
     }
 
@@ -223,7 +228,6 @@ class IgpsportBleController(context: Context) : LightController {
 
             val (writeChar, notifyChar) = findGattCharacteristics(peripheral) ?: return false
             characteristics[address] = writeChar
-            assemblers[address] = FrameAssembler()
             Timber.d("$TAG: Connected to iGPSPORT light $address ($name), write & notify characteristics ready")
 
             val notifyJob = scope.launch {
@@ -236,7 +240,6 @@ class IgpsportBleController(context: Context) : LightController {
                 }
             }
 
-            // Ensure CCCD notification subscription is active on light before querying battery
             delay(500)
             Timber.d("$TAG: Sending immediate readBattery query to iGPSPORT $address...")
             writeBytes(address, IgpsProtocol.readBattery())
@@ -244,17 +247,7 @@ class IgpsportBleController(context: Context) : LightController {
             updateDiscoveredLights()
             onDeviceConnected?.invoke()
 
-            // 60-Second Battery Polling Loop
-            val batteryPollerJob = scope.launch {
-                while (isActive) {
-                    delay(60_000L)
-                    Timber.d("$TAG: 🔋 60s Poller querying battery for iGPSPORT $address...")
-                    writeBytes(address, IgpsProtocol.readBattery())
-                }
-            }
-
             peripheral.state.first { it is ConnectionState.Disconnected }
-            batteryPollerJob.cancel()
             notifyJob.cancel()
             Timber.d("$TAG: Disconnected from iGPSPORT light $address")
             true
@@ -263,7 +256,7 @@ class IgpsportBleController(context: Context) : LightController {
             false
         } finally {
             characteristics.remove(address)
-            assemblers.remove(address)
+            batteryLevelsRaw.remove(address)
             updateDiscoveredLights()
         }
     }
@@ -313,7 +306,8 @@ class IgpsportBleController(context: Context) : LightController {
                 manufacturer = "iGPSPORT",
                 protocol = LightProtocol.IGPSPORT_BLE,
                 connected = characteristics.containsKey(address),
-                batteryPercent = batteryLevels[address],
+                batteryPercent = null, // Disconnected from data field
+                rawBatteryHex = batteryLevelsRaw[address],
             )
         }
     }
@@ -321,32 +315,10 @@ class IgpsportBleController(context: Context) : LightController {
     private fun parseNotification(address: String, data: ByteArray) {
         if (data.isEmpty()) return
         val hex = IgpsportProtocol.bytesToHex(data)
-        Timber.d("$TAG: 📩 Incoming notification from iGPSPORT $address ($hex)")
+        Timber.d("$TAG: 📩 Raw Notification from iGPSPORT $address: $hex")
 
-        // 1. Direct byte check for simple battery frame (0xAA 0x03 0x01 ...)
-        if (data.size >= 4 && data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
-            val battery = data[3].toInt() and 0xFF
-            if (battery in 0..100) {
-                Timber.d("$TAG: 🔋 Received direct battery for iGPSPORT $address: $battery%")
-                batteryLevels[address] = battery
-                updateDiscoveredLights()
-                return
-            }
-        }
-
-        // 2. Fragment stitching via FrameAssembler & Protobuf parsing
-        val assembler = assemblers.getOrPut(address) { FrameAssembler() }
-        val fullFrames = assembler.push(data)
-
-        for (frame in fullFrames) {
-            val update = IgpsProtocol.parseFrame(frame)
-            val battery = update?.batteryPercent ?: update?.auxBatteryPercent
-            if (battery != null && battery in 0..100) {
-                Timber.d("$TAG: 🔋 Received stitched battery update for iGPSPORT $address: $battery%")
-                batteryLevels[address] = battery
-                updateDiscoveredLights()
-            }
-        }
+        batteryLevelsRaw[address] = hex
+        updateDiscoveredLights()
     }
 
     override fun setMode(deviceId: String, modeName: String) {

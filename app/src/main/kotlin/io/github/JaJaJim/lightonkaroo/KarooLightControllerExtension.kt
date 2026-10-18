@@ -45,6 +45,7 @@ data class DiscoveredLight(
     val temperature: Int? = null,
     val currentMode: String? = null,
     val batteryFromRadar: Boolean = false,
+    val rawBatteryHex: String? = null,
 )
 
 class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConfig.VERSION_NAME) {

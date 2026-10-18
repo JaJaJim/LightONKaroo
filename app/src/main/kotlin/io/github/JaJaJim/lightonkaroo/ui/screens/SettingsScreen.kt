@@ -843,9 +843,42 @@ private fun LightCard(
 
             if (light.protocol == LightProtocol.IGPSPORT_BLE || light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
                 HorizontalDivider()
-                Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("iGPSPORT Diagnostic & Raw BLE Payload", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "Raw Battery Payload (Hex):",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Yellow,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        light.rawBatteryHex ?: "Waiting for raw GATT response...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Green,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Button(
+                        onClick = {
+                            igpController?.queryRawBattery(light.id)
+                        },
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Text("Query Raw Battery Payload")
+                    }
+                }
+
+                HorizontalDivider()
+                Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
                 val igpConfig = igpController?.getDeviceConfig(light.id)
                 var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
 
