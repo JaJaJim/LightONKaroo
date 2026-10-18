@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.light.LightController
+import io.github.JaJaJim.lightonkaroo.protocol.FrameAssembler
 import io.github.JaJaJim.lightonkaroo.protocol.IgpsProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,7 @@ class IgpsportBleController(context: Context) : LightController {
     private val characteristics = ConcurrentHashMap<String, RemoteCharacteristic>()
     private val deviceConfigs = ConcurrentHashMap<String, IgpsportDeviceConfig>()
     private val batteryLevels = ConcurrentHashMap<String, Int>()
+    private val assemblers = ConcurrentHashMap<String, FrameAssembler>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
@@ -180,6 +182,7 @@ class IgpsportBleController(context: Context) : LightController {
     fun disconnect(address: String) {
         connectionJobs.remove(address)?.cancel()
         characteristics.remove(address)
+        assemblers.remove(address)
         updateDiscoveredLights()
     }
 
@@ -220,6 +223,7 @@ class IgpsportBleController(context: Context) : LightController {
 
             val (writeChar, notifyChar) = findGattCharacteristics(peripheral) ?: return false
             characteristics[address] = writeChar
+            assemblers[address] = FrameAssembler()
             Timber.d("$TAG: Connected to iGPSPORT light $address ($name), write & notify characteristics ready")
 
             val notifyJob = scope.launch {
@@ -255,6 +259,7 @@ class IgpsportBleController(context: Context) : LightController {
             false
         } finally {
             characteristics.remove(address)
+            assemblers.remove(address)
             updateDiscoveredLights()
         }
     }
@@ -310,25 +315,31 @@ class IgpsportBleController(context: Context) : LightController {
     }
 
     private fun parseNotification(address: String, data: ByteArray) {
-        if (data.size < 4) return
+        if (data.isEmpty()) return
 
         // 1. Direct byte check for simple battery frame (0xAA 0x03 0x01 ...)
-        if (data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
+        if (data.size >= 4 && data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
             val battery = data[3].toInt() and 0xFF
             if (battery in 0..100) {
+                Timber.d("$TAG: 🔋 Received direct battery for iGPSPORT $address: $battery%")
                 batteryLevels[address] = battery
                 updateDiscoveredLights()
                 return
             }
         }
 
-        // 2. Protobuf transport frame check (TYPE_DATA 0x01 / TYPE_STATE 0x03)
-        val update = IgpsProtocol.parseFrame(data)
-        val battery = update?.batteryPercent ?: update?.auxBatteryPercent
-        if (battery != null && battery in 0..100) {
-            Timber.d("$TAG: 🔋 Received battery update for iGPSPORT $address: $battery%")
-            batteryLevels[address] = battery
-            updateDiscoveredLights()
+        // 2. Fragment stitching via FrameAssembler & Protobuf parsing
+        val assembler = assemblers.getOrPut(address) { FrameAssembler() }
+        val fullFrames = assembler.push(data)
+
+        for (frame in fullFrames) {
+            val update = IgpsProtocol.parseFrame(frame)
+            val battery = update?.batteryPercent ?: update?.auxBatteryPercent
+            if (battery != null && battery in 0..100) {
+                Timber.d("$TAG: 🔋 Received stitched battery update for iGPSPORT $address: $battery%")
+                batteryLevels[address] = battery
+                updateDiscoveredLights()
+            }
         }
     }
 
