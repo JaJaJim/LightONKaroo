@@ -64,9 +64,9 @@ object IgpsportDeviceModeProvider : LightModeProvider {
         LightModeOption("HIGH", "High"),
         LightModeOption("LOW", "Low"),
         LightModeOption("FLASH", "Flash"),
-        LightModeOption("CUSTOM_1", "Custom 1 (C1)"),
-        LightModeOption("CUSTOM_2", "Custom 2 (C2)"),
-        LightModeOption("CUSTOM_3", "Custom 3 (C3)"),
+        LightModeOption("CUSTOM_1", "Custom 1"),
+        LightModeOption("CUSTOM_2", "Custom 2"),
+        LightModeOption("CUSTOM_3", "Custom 3"),
     )
 }
 

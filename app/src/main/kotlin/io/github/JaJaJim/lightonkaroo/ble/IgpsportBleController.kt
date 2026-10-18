@@ -327,6 +327,51 @@ class IgpsportBleController(context: Context) : LightController {
         }
     }
 
+    fun setAutoDimming(address: String, enabled: Boolean) {
+        val config = getDeviceConfig(address)
+        deviceConfigs[address] = config.copy(autoDimmingEnabled = enabled)
+        val command = IgpsportProtocol.buildAutoDimmingCommand(enabled)
+        scope.launch {
+            val chunks = IgpsProtocol.chunks(command)
+            for (chunk in chunks) {
+                writeBytes(address, chunk)
+                delay(20)
+            }
+        }
+    }
+
+    fun setLowBatterySave(address: String, enabled: Boolean) {
+        val config = getDeviceConfig(address)
+        deviceConfigs[address] = config.copy(lowBatterySaveEnabled = enabled)
+        val command = IgpsportProtocol.buildLowBatterySaveCommand(enabled)
+        scope.launch {
+            val chunks = IgpsProtocol.chunks(command)
+            for (chunk in chunks) {
+                writeBytes(address, chunk)
+                delay(20)
+            }
+        }
+    }
+
+    fun setCustomModeConfig(
+        address: String,
+        slotNumber: Int,
+        patternType: Int,
+        highBeamPct: Int,
+        lowBeamPct: Int,
+    ) {
+        val command = IgpsportProtocol.buildCustomModeConfigCommand(
+            slotNumber, patternType, highBeamPct, lowBeamPct
+        )
+        scope.launch {
+            val chunks = IgpsProtocol.chunks(command)
+            for (chunk in chunks) {
+                writeBytes(address, chunk)
+                delay(20)
+            }
+        }
+    }
+
     private suspend fun writeBytes(address: String, bytes: ByteArray) {
         val characteristic = characteristics[address]
         if (characteristic == null) {

@@ -848,7 +848,7 @@ private fun LightCard(
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
                 val igpConfig = igpController?.getDeviceConfig(light.id)
                 var autoDimming by remember(light.id) { mutableStateOf(igpConfig?.autoDimmingEnabled ?: false) }
-                var lowBatterySave by remember(light.id) { mutableStateOf(false) }
+                var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -865,8 +865,9 @@ private fun LightCard(
                     }
                     Switch(
                         checked = autoDimming,
-                        onCheckedChange = {
-                            autoDimming = it
+                        onCheckedChange = { active ->
+                            autoDimming = active
+                            igpController?.setAutoDimming(light.id, active)
                         },
                     )
                 }
@@ -886,44 +887,70 @@ private fun LightCard(
                     }
                     Switch(
                         checked = lowBatterySave,
-                        onCheckedChange = {
-                            lowBatterySave = it
+                        onCheckedChange = { active ->
+                            lowBatterySave = active
+                            igpController?.setLowBatterySave(light.id, active)
                         },
                     )
                 }
 
                 HorizontalDivider()
-                Text("Custom Light Profiles (C1, C2, C3)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Custom Light Profiles", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
-                var custom1Bright by remember(light.id) { mutableStateOf(100) }
-                StepperSlider(
-                    label = "Custom 1 (C1) Brightness",
-                    value = custom1Bright,
-                    range = 10..100,
-                    step = 10,
-                    unit = "%",
-                    onSaveValue = { custom1Bright = it },
-                )
+                for (slot in 1..3) {
+                    var highBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
+                    var lowBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
+                    var patternType by remember(light.id, slot) { mutableStateOf(0) } // 0: Steady, 1: Flash, 2: Breath
 
-                var custom2Bright by remember(light.id) { mutableStateOf(50) }
-                StepperSlider(
-                    label = "Custom 2 (C2) Brightness",
-                    value = custom2Bright,
-                    range = 10..100,
-                    step = 10,
-                    unit = "%",
-                    onSaveValue = { custom2Bright = it },
-                )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Custom $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
 
-                var custom3Bright by remember(light.id) { mutableStateOf(25) }
-                StepperSlider(
-                    label = "Custom 3 (C3) Brightness",
-                    value = custom3Bright,
-                    range = 10..100,
-                    step = 10,
-                    unit = "%",
-                    onSaveValue = { custom3Bright = it },
-                )
+                        InlineDropdown(
+                            label = "Pattern Type",
+                            selectedId = patternType.toString(),
+                            options = listOf(
+                                "0" to "Steady (Dauerlicht)",
+                                "1" to "Flash (Blinken)",
+                                "2" to "Breath (Pulsieren)",
+                            ),
+                            onSelected = { selected ->
+                                patternType = selected.toIntOrNull() ?: 0
+                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                            },
+                        )
+
+                        StepperSlider(
+                            label = "High Beam (Fernlicht)",
+                            value = highBeamPct,
+                            range = 0..100,
+                            step = 1,
+                            unit = "%",
+                            onSaveValue = { pct ->
+                                highBeamPct = pct
+                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                            },
+                        )
+
+                        StepperSlider(
+                            label = "Low Beam (Abblendlicht)",
+                            value = lowBeamPct,
+                            range = 0..100,
+                            step = 1,
+                            unit = "%",
+                            onSaveValue = { pct ->
+                                lowBeamPct = pct
+                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                            },
+                        )
+                    }
+                    if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
+                }
             }
         }
     }
