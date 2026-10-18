@@ -240,7 +240,8 @@ class IgpsportBleController(context: Context) : LightController {
                 }
             }
 
-            delay(500)
+            // Give 2.0s buffer after GATT connection & service discovery before querying battery
+            delay(2000)
             Timber.d("$TAG: Sending immediate readBattery query to iGPSPORT $address...")
             writeBytes(address, IgpsProtocol.readBattery())
 
