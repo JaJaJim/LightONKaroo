@@ -229,12 +229,16 @@ class IgpsportBleController(context: Context) : LightController {
             val notifyJob = scope.launch {
                 try {
                     val listenChar = notifyChar ?: writeChar
+                    Timber.d("$TAG: Subscribing to GATT notifications on characteristic ${listenChar.uuid}...")
                     listenChar.subscribe().collect { data -> parseNotification(address, data) }
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    Timber.w(e, "$TAG: Failed to subscribe to GATT notifications on $address")
+                }
             }
 
-            // Immediate battery query on connection / data field load
-            delay(200)
+            // Ensure CCCD notification subscription is active on light before querying battery
+            delay(500)
+            Timber.d("$TAG: Sending immediate readBattery query to iGPSPORT $address...")
             writeBytes(address, IgpsProtocol.readBattery())
 
             updateDiscoveredLights()
@@ -316,6 +320,8 @@ class IgpsportBleController(context: Context) : LightController {
 
     private fun parseNotification(address: String, data: ByteArray) {
         if (data.isEmpty()) return
+        val hex = IgpsportProtocol.bytesToHex(data)
+        Timber.d("$TAG: 📩 Incoming notification from iGPSPORT $address ($hex)")
 
         // 1. Direct byte check for simple battery frame (0xAA 0x03 0x01 ...)
         if (data.size >= 4 && data[0] == 0xAA.toByte() && data[1] == 0x03.toByte() && data[2] == 0x01.toByte()) {
