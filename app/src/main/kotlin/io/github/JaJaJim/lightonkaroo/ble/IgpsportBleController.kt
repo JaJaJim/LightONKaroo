@@ -49,6 +49,7 @@ class IgpsportBleController(context: Context) : LightController {
 
     private val nordicUartService = Uuid.parse(IgpsProtocol.UART_SERVICE) // 6e400001-b5a3-f393-e0a9-e50e24dcca9e
     private val nordicUartWrite = Uuid.parse(IgpsProtocol.UART_WRITE)     // 6e400002-b5a3-f393-e0a9-e50e24dcca9e
+    private val nordicUartNotify = Uuid.parse(IgpsProtocol.UART_NOTIFY)   // 6e400003-b5a3-f393-e0a9-e50e24dcca9e
     private val legacyService = Uuid.parse("0000FF12-0000-1000-8000-00805f9b34fb")
     private val legacyWrite = Uuid.parse("0000FF01-0000-1000-8000-00805f9b34fb")
 
@@ -217,27 +218,36 @@ class IgpsportBleController(context: Context) : LightController {
                 return false
             }
 
-            val characteristic = findTargetCharacteristic(peripheral)
-            if (characteristic == null) {
-                Timber.w("$TAG: Writable characteristic not found for iGPSPORT light $address")
-                return false
-            }
-            characteristics[address] = characteristic
-            Timber.d("$TAG: Connected to iGPSPORT light $address ($name), characteristic found")
+            val (writeChar, notifyChar) = findGattCharacteristics(peripheral) ?: return false
+            characteristics[address] = writeChar
+            Timber.d("$TAG: Connected to iGPSPORT light $address ($name), write & notify characteristics ready")
 
-            scope.launch {
+            val notifyJob = scope.launch {
                 try {
-                    characteristic.subscribe().collect { data -> parseNotification(address, data) }
+                    val listenChar = notifyChar ?: writeChar
+                    listenChar.subscribe().collect { data -> parseNotification(address, data) }
                 } catch (_: Exception) { }
             }
 
-            delay(180)
-            writeBytes(address, IgpsportProtocol.buildQueryBattery())
+            // Immediate battery query on connection / data field load
+            delay(200)
+            writeBytes(address, IgpsProtocol.readBattery())
 
             updateDiscoveredLights()
             onDeviceConnected?.invoke()
 
+            // 60-Second Battery Polling Loop
+            val batteryPollerJob = scope.launch {
+                while (isActive) {
+                    delay(60_000L)
+                    Timber.d("$TAG: 🔋 60s Poller querying battery for iGPSPORT $address...")
+                    writeBytes(address, IgpsProtocol.readBattery())
+                }
+            }
+
             peripheral.state.first { it is ConnectionState.Disconnected }
+            batteryPollerJob.cancel()
+            notifyJob.cancel()
             Timber.d("$TAG: Disconnected from iGPSPORT light $address")
             true
         } catch (e: Exception) {
@@ -249,17 +259,18 @@ class IgpsportBleController(context: Context) : LightController {
         }
     }
 
-    private suspend fun findTargetCharacteristic(peripheral: Peripheral): RemoteCharacteristic? {
+    private suspend fun findGattCharacteristics(peripheral: Peripheral): Pair<RemoteCharacteristic, RemoteCharacteristic?>? {
         for (attempt in 1..10) {
             try {
                 val services = peripheral.services().value
 
                 // 1. Primary: Nordic UART Service (VS1800S)
                 val nordicService = services.firstOrNull { it.uuid == nordicUartService }
-                val nordicChar = nordicService?.characteristics?.firstOrNull { it.uuid == nordicUartWrite }
-                if (nordicChar != null) {
-                    Timber.d("$TAG: Found Nordic UART characteristic (VS1800S) for ${peripheral.name}")
-                    return nordicChar
+                val writeChar = nordicService?.characteristics?.firstOrNull { it.uuid == nordicUartWrite }
+                val notifyChar = nordicService?.characteristics?.firstOrNull { it.uuid == nordicUartNotify }
+                if (writeChar != null) {
+                    Timber.d("$TAG: Found Nordic UART characteristics (VS1800S) for ${peripheral.name}")
+                    return Pair(writeChar, notifyChar)
                 }
 
                 // 2. Secondary: Legacy Service 0xFF12 (VS1200S / VS800 / VS500)
@@ -267,15 +278,14 @@ class IgpsportBleController(context: Context) : LightController {
                 val legChar = legService?.characteristics?.firstOrNull { it.uuid == legacyWrite }
                 if (legChar != null) {
                     Timber.d("$TAG: Found Legacy 0xFF12 characteristic (VS1200S) for ${peripheral.name}")
-                    return legChar
+                    return Pair(legChar, legChar)
                 }
 
-                // 3. Fallback: First writable characteristic across any service
+                // 3. Fallback
                 for (service in services) {
                     val fallbackChar = service.characteristics.firstOrNull()
                     if (fallbackChar != null) {
-                        Timber.d("$TAG: Found Fallback GATT characteristic (${fallbackChar.uuid}) for ${peripheral.name}")
-                        return fallbackChar
+                        return Pair(fallbackChar, fallbackChar)
                     }
                 }
             } catch (e: Exception) {
