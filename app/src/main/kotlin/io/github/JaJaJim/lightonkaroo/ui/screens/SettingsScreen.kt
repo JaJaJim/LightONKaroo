@@ -207,17 +207,6 @@ private fun ConnectedLightsSection(
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(
-            onClick = {
-                onUpdateAssignment("", null) // Reset light assignments
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Reset All Light Settings to Default", color = MaterialTheme.colorScheme.onErrorContainer)
-        }
     }
 }
 
@@ -869,7 +858,7 @@ private fun LightCard(
                 var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
 
                 val nameUpper = ((assignment?.deviceName ?: "") + " " + light.name).uppercase()
-                val isExplicitSingleBeam = nameUpper.contains("1200") || nameUpper.contains("800") || nameUpper.contains("500")
+                val isExplicitSingleBeam = nameUpper.contains("1200") || (nameUpper.contains("800") && !nameUpper.contains("1800")) || nameUpper.contains("500")
                 val isDualBeam = !isExplicitSingleBeam
                 val isVs500 = nameUpper.contains("500")
                 val hasLightSensor = !isVs500
