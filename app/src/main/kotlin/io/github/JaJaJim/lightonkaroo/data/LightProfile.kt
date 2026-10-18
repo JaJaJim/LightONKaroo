@@ -61,12 +61,9 @@ object AntPlusModeProvider : LightModeProvider {
 object IgpsportDeviceModeProvider : LightModeProvider {
     override fun availableModes(): List<LightModeOption> = listOf(
         LightModeOption("OFF", "Off"),
-        LightModeOption("STEADY_100", "High (100%)"),
-        LightModeOption("STEADY_50", "Mid (50%)"),
-        LightModeOption("STEADY_25", "Low (25%)"),
-        LightModeOption("FLASH_100", "Flash Hi"),
-        LightModeOption("FLASH_50", "Flash Lo"),
-        LightModeOption("PULSE_100", "Pulse Hi"),
+        LightModeOption("HIGH", "High"),
+        LightModeOption("LOW", "Low"),
+        LightModeOption("FLASH", "Flash"),
         LightModeOption("CUSTOM_1", "Custom 1 (C1)"),
         LightModeOption("CUSTOM_2", "Custom 2 (C2)"),
         LightModeOption("CUSTOM_3", "Custom 3 (C3)"),
@@ -129,6 +126,16 @@ data class LightControllerSettings(
     val overrideActiveModes: Boolean = false,
     val simulateRadar: Boolean = false,
     val softwareThreatModeEnabled: Boolean = false,
+    val remoteEnabled: Boolean = false,
+    val remoteDeviceAddress: String = "",
+    val remoteDeviceName: String = "",
+    val remoteBoundBytesHex: String = "",
+    val remoteSecondaryBytesHex: String = "",
+    val remoteBoundKeycode: Int = 0,
+    val remoteSecondaryKeycode: Int = 0,
+    val remoteSniffingActive: Boolean = false,
+    val remoteSniffingTarget: String = "PRIMARY", // PRIMARY or SECONDARY
+    val remoteSniffingAddress: String = "",
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     fun migrateProfilesToAssignments(): LightControllerSettings {

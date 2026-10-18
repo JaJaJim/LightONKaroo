@@ -2,6 +2,8 @@ package io.github.JaJaJim.lightonkaroo.ble
 
 import io.github.JaJaJim.lightonkaroo.data.LightModeOption
 import io.github.JaJaJim.lightonkaroo.data.LightModeProvider
+import io.github.JaJaJim.lightonkaroo.protocol.IgpsProtocol
+import io.github.JaJaJim.lightonkaroo.protocol.LightModes
 
 object IgpsportProtocol {
 
@@ -10,32 +12,11 @@ object IgpsportProtocol {
 
     val SUPPORTED_PREFIXES = setOf("VS1800", "VS1200", "VS800", "VS500", "VS", "IGP", "IGPSPORT")
 
-    fun buildOffCommand(): ByteArray {
-        return byteArrayOf(0xAA.toByte(), 0x05, 0x00, 0x00, 0x00, 0x55.toByte())
-    }
+    fun buildOffCommand(): ByteArray = IgpsProtocol.setMode(LightModes.OFF)
 
-    fun buildModeCommand(
-        modeCode: Int, // 1: Steady, 2: Flash, 3: Pulse, 4: Custom
-        brightnessPercent: Int = 100,
-        autoDimming: Boolean = false,
-    ): ByteArray {
-        val brightByte = brightnessPercent.coerceIn(10, 100).toByte()
-        val autoByte = if (autoDimming) 0x01.toByte() else 0x00.toByte()
-        val checksum = (0xAA xor 0x05 xor modeCode xor brightByte.toInt() xor autoByte.toInt()).toByte()
+    fun buildModeCommand(modeCode: Int): ByteArray = IgpsProtocol.setMode(modeCode)
 
-        return byteArrayOf(
-            0xAA.toByte(),
-            0x05.toByte(),
-            modeCode.toByte(),
-            brightByte,
-            autoByte,
-            checksum,
-        )
-    }
-
-    fun buildQueryBattery(): ByteArray {
-        return byteArrayOf(0xAA.toByte(), 0x03, 0x01, 0xA8.toByte())
-    }
+    fun buildQueryBattery(): ByteArray = IgpsProtocol.readBattery()
 
     fun bytesToHex(bytes: ByteArray): String =
         bytes.joinToString("") { "%02X".format(it) }
@@ -47,33 +28,29 @@ data class IgpsportDeviceConfig(
 
     override fun availableModes(): List<LightModeOption> = listOf(
         LightModeOption("OFF", "Off"),
-        LightModeOption("STEADY_100", "Steady 100%"),
-        LightModeOption("STEADY_50", "Steady 50%"),
-        LightModeOption("STEADY_25", "Steady 25%"),
-        LightModeOption("FLASH_100", "Flash 100%"),
-        LightModeOption("FLASH_50", "Flash 50%"),
-        LightModeOption("PULSE_100", "Pulse 100%"),
-        LightModeOption("PULSE_50", "Pulse 50%"),
-        LightModeOption("CUSTOM_100", "Custom High"),
-        LightModeOption("CUSTOM_50", "Custom Mid"),
-        LightModeOption("CUSTOM_25", "Custom Low"),
+        LightModeOption("HIGH", "High"),
+        LightModeOption("MID", "Mid"),
+        LightModeOption("LOW", "Low"),
+        LightModeOption("FLASH_HI", "Flash Hi"),
+        LightModeOption("FLASH_LO", "Flash Lo"),
+        LightModeOption("CUSTOM_1", "Custom 1 (C1)"),
+        LightModeOption("CUSTOM_2", "Custom 2 (C2)"),
+        LightModeOption("CUSTOM_3", "Custom 3 (C3)"),
     )
 
     fun buildCommand(modeId: String, autoDimming: Boolean = false): ByteArray? {
-        if (modeId == "OFF") return IgpsportProtocol.buildOffCommand()
-
-        val parts = modeId.split("_", limit = 2)
-        if (parts.size != 2) return null
-        val bright = parts[1].toIntOrNull() ?: 100
-
-        val modeCode = when (parts[0]) {
-            "STEADY" -> 1
-            "FLASH" -> 2
-            "PULSE" -> 3
-            "CUSTOM" -> 4
-            else -> 1
+        val modeCode = when (modeId.uppercase()) {
+            "HIGH", "STEADY_100", "STEADY_HIGH" -> 1
+            "MID", "STEADY_50", "STEADY_MID" -> 2
+            "LOW", "STEADY_25", "STEADY_LOW" -> 3
+            "FLASH_HI", "FLASH", "FLASH_100" -> 4
+            "FLASH_LO", "FLASH_50" -> 5
+            "CUSTOM_1", "CUSTOM1", "C1" -> 64
+            "CUSTOM_2", "CUSTOM2", "C2" -> 65
+            "CUSTOM_3", "CUSTOM3", "C3" -> 66
+            "OFF" -> 0
+            else -> 0
         }
-
-        return IgpsportProtocol.buildModeCommand(modeCode, bright, autoDimming)
+        return IgpsProtocol.setMode(modeCode)
     }
 }

@@ -312,14 +312,18 @@ class IgpsportBleController(context: Context) : LightController {
 
     override fun setMode(deviceId: String, modeName: String) {
         val config = getDeviceConfig(deviceId)
-        val command = config.buildCommand(modeName, config.autoDimmingEnabled)
-        if (command == null) {
+        val frame = config.buildCommand(modeName, config.autoDimmingEnabled)
+        if (frame == null) {
             Timber.w("$TAG: Unknown mode: $modeName for iGPSPORT device $deviceId")
             return
         }
-        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${IgpsportProtocol.bytesToHex(command)}")
+        val chunks = IgpsProtocol.chunks(frame)
+        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${chunks.size} chunks: ${IgpsportProtocol.bytesToHex(frame)}")
         scope.launch {
-            writeBytes(deviceId, command)
+            for (chunk in chunks) {
+                writeBytes(deviceId, chunk)
+                delay(20)
+            }
         }
     }
 
