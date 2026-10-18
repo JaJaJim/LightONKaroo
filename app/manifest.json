@@ -2,10 +2,10 @@
   "label": "LightONKaroo",
   "packageName": "io.github.JaJaJim.lightonkaroo",
   "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
-  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6/LightONKaroo-v0.1.6.apk",
-  "latestVersion": "0.1.6",
-  "latestVersionCode": 22,
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6-R2/LightONKaroo-v0.1.6-R2.apk",
+  "latestVersion": "0.1.6-R2",
+  "latestVersionCode": 23,
   "developer": "Peter Weber",
   "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode and iGPSPORT smart light support.",
-  "releaseNotes": "* iGPSPORT BLE Smart Light Integration: Full support for VS1800S (Dual Beam) & VS1200S/VS800S/VS500 (Single Beam)\n* ANT+ Light Command AIDL Fix: Dynamic descriptor discovery (LightCommandConnectionAIDL at TX 18) restoring full ANT+ control\n* Ravemen FR300 pre-OFF mode filtering: Prevents status sticking when light is turned OFF\n* BLE Stack & Battery Optimization: SCAN_MODE_BALANCED with 10s auto-timeout and adaptive reconnection backoff\n* Streamlined UI: Collapsible Custom Profiles, unified sliders with 30% smaller stepper buttons, and pure English labels"
+  "releaseNotes": "* v0.1.6-R2: Fixed iGPSPORT VS1800S dual-beam controls fallback after device reboot / fresh install\n* iGPSPORT BLE Smart Light Integration: Full support for VS1800S (Dual Beam) & VS1200S/VS800S/VS500 (Single Beam)\n* ANT+ Light Command AIDL Fix: Dynamic descriptor discovery (LightCommandConnectionAIDL at TX 18) restoring full ANT+ control\n* Ravemen FR300 pre-OFF mode filtering: Prevents status sticking when light is turned OFF\n* BLE Stack & Battery Optimization: SCAN_MODE_BALANCED with 10s auto-timeout and adaptive reconnection backoff"
 }

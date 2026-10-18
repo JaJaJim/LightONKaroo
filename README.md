@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.6 "iGPSport"
+# LightONKaroo v0.1.6-R2 "iGPSport"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3** (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
@@ -57,6 +57,9 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S / 1300Pro and iGPSPORT VS1800S. Implemented speculative support for VS1200S, VS800S, and VS500 series smart lights based on igpsport-karoo.
 
 ## 📝 Changelog
+### v0.1.6-R2 "iGPSport"
+- **iGPSPORT MODEL FALLBACK FIX**: Fixed iGPSPORT model detection to default to **VS1800S** dual-beam controls (High Beam & Low Beam) after Karoo reboot or fresh install, preventing controls from defaulting to single-beam mode when device name is temporarily unresolved.
+
 ### v0.1.6 "iGPSport"
 - **iGPSPORT BLE SMART LIGHT INTEGRATION**:
   - **Dedicated BLE Stack**: Independent Bluetooth controller supporting iGPSPORT smart bike lights (VS1800S, VS1200S, VS800S, VS500) with parsed battery levels, periodic 60s battery polling, and model-aware custom light profiles.
