@@ -17,6 +17,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -64,6 +65,9 @@ class MagicshineBleController(context: Context) : LightController {
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
+
+    private val _actualModes = MutableStateFlow<Map<String, String>>(emptyMap())
+    val actualModes: StateFlow<Map<String, String>> = _actualModes
 
     var onDeviceConnected: (() -> Unit)? = null
     var assignedDeviceIds: Set<String> = emptySet()
@@ -140,10 +144,14 @@ class MagicshineBleController(context: Context) : LightController {
         }
         try {
             val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                 .build()
             scanner.startScan(null, settings, callback)
             scanCallback = callback
+            scope.launch {
+                delay(10_000L)
+                stopDiscovery()
+            }
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to start BLE scan")
         }
@@ -178,14 +186,36 @@ class MagicshineBleController(context: Context) : LightController {
         scanCallback = null
     }
 
+    private val failureCounts = ConcurrentHashMap<String, Int>()
+
+    fun resetBackoff(address: String? = null) {
+        if (address != null) {
+            failureCounts[address] = 0
+        } else {
+            failureCounts.clear()
+        }
+    }
+
     private fun startConnectionSupervisor(address: String) {
         if (connectionJobs[address]?.isActive == true) return
         connectionJobs[address] = scope.launch {
-            var backoff = RECONNECT_MIN_MS
             while (isActive && (address in assignedDeviceIds || isSettingsUiActive)) {
                 val wasConnected = attemptConnect(address)
-                backoff = if (wasConnected) RECONNECT_MIN_MS else minOf(backoff * 2, RECONNECT_MAX_MS)
-                delay(backoff)
+                if (wasConnected) {
+                    failureCounts[address] = 0
+                } else {
+                    val current = failureCounts[address] ?: 0
+                    failureCounts[address] = current + 1
+                }
+
+                val failures = failureCounts[address] ?: 0
+                val delayMs = when {
+                    failures <= 3 -> 3_000L
+                    failures <= 6 -> 10_000L
+                    else -> 60_000L
+                }
+
+                delay(delayMs)
             }
             connectionJobs.remove(address)
         }
@@ -194,6 +224,7 @@ class MagicshineBleController(context: Context) : LightController {
     fun disconnect(address: String) {
         connectionJobs.remove(address)?.cancel()
         characteristics.remove(address)
+        failureCounts.remove(address)
         updateDiscoveredLights()
     }
 
@@ -211,6 +242,7 @@ class MagicshineBleController(context: Context) : LightController {
         deviceConfigs.putIfAbsent(address, MagicshineDeviceConfig.forDevice(name))
 
         return try {
+            stopDiscovery()
             Timber.d("$TAG: Connecting to $address")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
@@ -299,6 +331,7 @@ class MagicshineBleController(context: Context) : LightController {
                 connected = characteristics.containsKey(address),
                 batteryPercent = batteryLevels[address],
                 temperature = temperatures[address],
+                currentMode = _actualModes.value[address],
             )
         }
     }
@@ -336,10 +369,12 @@ class MagicshineBleController(context: Context) : LightController {
             Timber.w("$TAG: Unknown mode: $modeName for device $deviceId")
             return
         }
+        _actualModes.update { it + (deviceId to modeName) }
         Timber.d("$TAG: setMode($deviceId, $modeName) -> ${MagicshineProtocol.bytesToHex(command)}")
         scope.launch {
             writeBytes(deviceId, command)
         }
+        updateDiscoveredLights()
     }
 
     private suspend fun writeBytes(address: String, bytes: ByteArray) {

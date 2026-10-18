@@ -199,10 +199,40 @@ object IgpsProtocol {
             val id = e.varint(1)?.toInt() ?: return@entries null
             id to (e.varint(2)?.toInt() ?: SmartConfig.OFF)
         }
+        var battery: Int? = fields.message(F_BATTERY)?.let { ProtoWire.parse(it)?.varint(13)?.toInt() }
+        if (battery == null || battery !in 1..100) {
+            // Fallback 1: Check if inner message in F_BATTERY has any varint in 1..100
+            fields.message(F_BATTERY)?.let { innerBytes ->
+                ProtoWire.parse(innerBytes)?.forEach { (_, vals) ->
+                    for (v in vals) {
+                        if (v is ProtoWire.Value.Varint && v.value in 1..100) {
+                            battery = v.value.toInt()
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        if (battery == null || battery !in 1..100) {
+            // Fallback 2: Check direct varints in payload
+            val directVarint = fields.varint(F_BATTERY) ?: fields.varint(13) ?: fields.varint(1)
+            if (directVarint != null && directVarint in 1..100) {
+                battery = directVarint.toInt()
+            }
+        }
+        if (battery == null || battery !in 1..100) {
+            // Fallback 3: Check byte 7 in header if sub-type is SUB_BATTERY
+            val subType = bytes[2].toInt() and 0xFF
+            val headerByte7 = bytes[7].toInt() and 0xFF
+            if ((subType == SUB_BATTERY || subType == SUB_AUX_BATTERY) && headerByte7 in 1..100) {
+                battery = headerByte7
+            }
+        }
+
         return LightUpdate(
             // An empty inner message means the protobuf default: off.
             mode = fields.message(F_CURRENT_MODE)?.let { ProtoWire.parse(it)?.varint(1)?.toInt() ?: LightModes.OFF },
-            batteryPercent = fields.message(F_BATTERY)?.let { ProtoWire.parse(it)?.varint(13)?.toInt() },
+            batteryPercent = battery,
             remainingMinutes = fields.message(F_REMAINING_TIME)?.let { ProtoWire.parse(it)?.varint(1)?.toInt() },
             declaredModes = declared,
             smartConfigs = smartConfigs,

@@ -138,7 +138,7 @@ class LightStatusDataType(
                     remoteViews.setTextColor(R.id.light_battery_text, info.batteryColor)
 
                     // Radar Threat Icon Status (High Priority Verification)
-                    val threatAssignments = engine.settings.lightAssignments.filter { it.enabled && it.useForThreatMode && it.protocol == LightProtocol.ANT_PLUS }
+                    val threatAssignments = engine.settings.lightAssignments.filter { it.enabled && it.useForThreatMode }
                     val hasThreatMode = threatAssignments.isNotEmpty() || info.isSimulatedRadar
 
                     if (hasThreatMode) {

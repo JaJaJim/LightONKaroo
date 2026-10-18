@@ -579,7 +579,7 @@ private fun StepperSlider(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 OutlinedButton(
                     onClick = {
@@ -587,10 +587,10 @@ private fun StepperSlider(
                         currentValue = next
                         onSaveValue(next)
                     },
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(25.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Text("-", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("-", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
 
                 Text(
@@ -606,10 +606,10 @@ private fun StepperSlider(
                         currentValue = next
                         onSaveValue(next)
                     },
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(25.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Text("+", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("+", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -626,10 +626,12 @@ private fun StepperSlider(
 
 @Composable
 private fun FooterSection() {
-    Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
+    Text("Supported Lights & Credits", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-        "ANT+: Supports ANT+ smart bike lights. Tested with Magene AT1200, Magicshine Hori 1300Pro, Ravemen FR300 ANT+, Coospo TR70 and Cycplus L7 radar.\n\nBLE: Tested with Magicshine Hori 1300S and 1300Pro. Partially supported (no high/low beam switching capability).",
+        "ANT+: Supports all ANT+ smart bike lights recognized by Karoo. Tested with Magene AT1200, Magicshine Hori 1300Pro, Ravemen FR300 ANT+, Coospo TR70, and Cycplus L7 radar.\n\n" +
+        "iGPSPORT BLE: Full support for iGPSPORT VS-series smart lights. Tested with VS1800S (Dual Beam). Support for VS1200S, VS800S, and VS500 (Single Beam) implemented based on igpsport-karoo by Tiago Fontes Dias (tiagodias00).\n\n" +
+        "BLE: Tested with Magicshine Hori 1300S and 1300Pro.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -724,8 +726,9 @@ private fun LightCard(
                 LightProtocol.BLE -> "BLE"
             }
             val statusText = if (light.connected) "Connected" else "Not found"
+            val batteryText = light.batteryPercent?.let { " · Battery Level $it%" } ?: ""
             Text(
-                text = "$protocolText · $statusText",
+                text = "$protocolText · $statusText$batteryText",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -842,45 +845,43 @@ private fun LightCard(
             }
 
             if (light.protocol == LightProtocol.IGPSPORT_BLE || light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
-                HorizontalDivider()
-                Text("iGPSPORT Diagnostic & Raw BLE Payload", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
+                val igpConfig = igpController?.getDeviceConfig(light.id)
+                var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        "Raw Battery Payload (Hex):",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Yellow,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        light.rawBatteryHex ?: "Waiting for raw GATT response...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Green,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Button(
-                        onClick = {
-                            igpController?.queryRawBattery(light.id)
-                        },
-                        modifier = Modifier.padding(top = 4.dp),
+                val nameUpper = light.name.uppercase()
+                val isVs1800 = nameUpper.contains("1800")
+                val isVs500 = nameUpper.contains("500")
+
+                if (!isVs500) {
+                    HorizontalDivider()
+                    Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Query Raw Battery Payload")
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Enable Low-Battery Power Saver", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Automatically switches to low-power flash when battery is critical",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = lowBatterySave,
+                            onCheckedChange = { active ->
+                                lowBatterySave = active
+                                igpController?.setLowBatterySave(light.id, active)
+                            },
+                        )
                     }
                 }
 
                 HorizontalDivider()
-                Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-
-                val igpConfig = igpController?.getDeviceConfig(light.id)
-                var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
+                var showCustomProfiles by remember(light.id) { mutableStateOf(false) }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -888,94 +889,112 @@ private fun LightCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Enable Low-Battery Power Saver", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Custom Light Profiles", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Automatically switches to low-power flash when battery is critical",
+                            "Configure custom light slots and beam levels",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(
-                        checked = lowBatterySave,
-                        onCheckedChange = { active ->
-                            lowBatterySave = active
-                            igpController?.setLowBatterySave(light.id, active)
-                        },
+                        checked = showCustomProfiles,
+                        onCheckedChange = { showCustomProfiles = it },
                     )
                 }
 
-                HorizontalDivider()
-                Text("Custom Light Profiles", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                if (showCustomProfiles) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    for (slot in 1..3) {
+                        var highBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
+                        var lowBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
+                        var mainPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
+                        var patternType by remember(light.id, slot) { mutableStateOf(0) } // 0: Steady, 1: Flash, 2: Breath
+                        var slotAutoDim by remember(light.id, slot) { mutableStateOf(false) }
 
-                for (slot in 1..3) {
-                    var highBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
-                    var lowBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
-                    var patternType by remember(light.id, slot) { mutableStateOf(0) } // 0: Steady, 1: Flash, 2: Breath
-                    var slotAutoDim by remember(light.id, slot) { mutableStateOf(false) }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                            .padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text("Custom $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Text("Enable Auto-Dimming", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                            Switch(
-                                checked = slotAutoDim,
-                                onCheckedChange = { active ->
-                                    slotAutoDim = active
-                                    igpController?.setAutoDimmingForSlot(light.id, slot, active)
+                            Text("Custom Slot $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+
+                            if (!isVs500) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("Enable Auto-Dimming", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                    Switch(
+                                        checked = slotAutoDim,
+                                        onCheckedChange = { active ->
+                                            slotAutoDim = active
+                                            igpController?.setAutoDimmingForSlot(light.id, slot, active)
+                                        },
+                                    )
+                                }
+                            }
+
+                            InlineDropdown(
+                                label = "Pattern Type",
+                                selectedId = patternType.toString(),
+                                options = listOf(
+                                    "0" to "Steady",
+                                    "1" to "Flash",
+                                    "2" to "Breath",
+                                ),
+                                onSelected = { selected ->
+                                    patternType = selected.toIntOrNull() ?: 0
+                                    if (isVs1800) {
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                    } else {
+                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
+                                    }
                                 },
                             )
+
+                            if (isVs1800) {
+                                StepperSlider(
+                                    label = "High Beam",
+                                    value = highBeamPct,
+                                    range = 0..100,
+                                    step = 1,
+                                    unit = "%",
+                                    onSaveValue = { pct ->
+                                        highBeamPct = pct
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                    },
+                                )
+
+                                StepperSlider(
+                                    label = "Low Beam",
+                                    value = lowBeamPct,
+                                    range = 0..100,
+                                    step = 1,
+                                    unit = "%",
+                                    onSaveValue = { pct ->
+                                        lowBeamPct = pct
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                    },
+                                )
+                            } else {
+                                StepperSlider(
+                                    label = "Brightness",
+                                    value = mainPct,
+                                    range = 0..100,
+                                    step = 1,
+                                    unit = "%",
+                                    onSaveValue = { pct ->
+                                        mainPct = pct
+                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
+                                    },
+                                )
+                            }
                         }
-
-                        InlineDropdown(
-                            label = "Pattern Type",
-                            selectedId = patternType.toString(),
-                            options = listOf(
-                                "0" to "Steady (Dauerlicht)",
-                                "1" to "Flash (Blinken)",
-                                "2" to "Breath (Pulsieren)",
-                            ),
-                            onSelected = { selected ->
-                                patternType = selected.toIntOrNull() ?: 0
-                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
-                            },
-                        )
-
-                        StepperSlider(
-                            label = "High Beam (Fernlicht)",
-                            value = highBeamPct,
-                            range = 0..100,
-                            step = 1,
-                            unit = "%",
-                            onSaveValue = { pct ->
-                                highBeamPct = pct
-                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
-                            },
-                        )
-
-                        StepperSlider(
-                            label = "Low Beam (Abblendlicht)",
-                            value = lowBeamPct,
-                            range = 0..100,
-                            step = 1,
-                            unit = "%",
-                            onSaveValue = { pct ->
-                                lowBeamPct = pct
-                                igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
-                            },
-                        )
+                        if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
                     }
-                    if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
                 }
             }
         }

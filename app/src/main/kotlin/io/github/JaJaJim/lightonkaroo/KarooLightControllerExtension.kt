@@ -88,6 +88,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private var lastRadarEventTimestamp = 0L
 
     private var threatHoldJob: Job? = null
+    private var threatVerificationJob: Job? = null
     private var bleStartJob: Job? = null
     private var discoveryPollingJob: Job? = null
     private var displayRotationJob: Job? = null
@@ -159,13 +160,38 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 igpsportController.discoveredLights,
                 lightControl.connectionStates,
                 lightControl.actualModes,
-            ) { ant, ble, igp, connStates, actualModes ->
+                igpsportController.actualModes,
+                magicshineController.actualModes,
+            ) { flows ->
+                @Suppress("UNCHECKED_CAST")
+                val ant = flows[0] as List<DiscoveredLight>
+                @Suppress("UNCHECKED_CAST")
+                val ble = flows[1] as List<DiscoveredLight>
+                @Suppress("UNCHECKED_CAST")
+                val igp = flows[2] as List<DiscoveredLight>
+                @Suppress("UNCHECKED_CAST")
+                val connStates = flows[3] as Map<String, String>
+                @Suppress("UNCHECKED_CAST")
+                val antModes = flows[4] as Map<String, String>
+                @Suppress("UNCHECKED_CAST")
+                val igpModes = flows[5] as Map<String, String>
+                @Suppress("UNCHECKED_CAST")
+                val bleModes = flows[6] as Map<String, String>
+
+                val mergedModes = antModes + igpModes + bleModes
                 ant.map {
+                    val connState = connStates[it.id]
+                    val actualMode = mergedModes[it.id]
+                    val isConnected = connState == "CONNECTED" || actualMode != null || (connState != "DISCONNECTED" && connState != "DISABLED")
                     it.copy(
-                        connected = connStates[it.id] == "CONNECTED",
-                        currentMode = actualModes[it.id],
+                        connected = isConnected,
+                        currentMode = actualMode,
                     )
-                } + ble + igp
+                } + ble.map {
+                    it.copy(currentMode = mergedModes[it.id] ?: it.currentMode)
+                } + igp.map {
+                    it.copy(currentMode = mergedModes[it.id] ?: it.currentMode)
+                }
             }.collect { merged ->
                 _discoveredLights.value = merged.toList()
             }
@@ -180,6 +206,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             if (connected) {
                 setupConsumers()
                 loadSettings()
+                lightControl.bind()
             }
         }
     }
@@ -266,6 +293,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun setupConsumers() {
+        discoverKarooLights()
         karooSystem.addConsumer<RideState> { state ->
             handleRideState(state)
         }
@@ -275,6 +303,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         when (state) {
             is RideState.Recording -> {
                 rideActive = true
+                igpsportController.resetBackoff()
+                magicshineController.resetBackoff()
                 lightControl.bind()
                 engine.onRideStart()
                 startDiscoveryPolling()
@@ -300,7 +330,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 engine.onRideStop()
                 extensionScope.launch {
                     delay(1000L)
-                    if (!settingsUiActive && !rideActive) {
+                    val hasAntAssignments = engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.ANT_PLUS }
+                    if (!settingsUiActive && !rideActive && !hasAntAssignments) {
                         lightControl.unbind()
                     }
                 }
@@ -369,6 +400,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         igpsportController.isSettingsUiActive = active
 
         if (active) {
+            igpsportController.resetBackoff()
+            magicshineController.resetBackoff()
             lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
@@ -500,11 +533,16 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
             try {
                 val settings = android.bluetooth.le.ScanSettings.Builder()
-                    .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED)
                     .build()
                 scanner.startScan(null, settings, callback)
                 unifiedScanCallback = callback
-                Timber.d("$TAG: Single unified BLE scan started successfully")
+                Timber.d("$TAG: Single unified BLE scan started successfully (SCAN_MODE_BALANCED)")
+
+                extensionScope.launch {
+                    delay(10_000L)
+                    stopUnifiedBleScan()
+                }
             } catch (e: SecurityException) {
                 Timber.e(e, "$TAG: Permission missing for BLE scan")
             } catch (e: Exception) {
@@ -586,7 +624,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
                 for (device in antDeviceCache) {
                     lightControl.registerConnectionState(device.id)
-                    lightControl.forceRefreshLightParameters(device.id)
+                    lightControl.registerForLightParameters(device.id)
                 }
             }
         }
@@ -605,14 +643,18 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         _antLights.value = antDeviceCache.map { device ->
             val assignment = engine.settings.lightAssignments.find { it.deviceId == device.id }
             val useRadarBattery = assignment?.role == LightRole.REAR
+            val connState = lightControl.connectionStates.value[device.id]
+            val actualMode = lightControl.actualModes.value[device.id]
+            val isConnected = connState == "CONNECTED" || actualMode != null || (connState != "DISCONNECTED" && connState != "DISABLED")
 
             DiscoveredLight(
                 id = device.id,
                 name = device.name,
                 manufacturer = device.manufacturer,
-                connected = lightControl.connectionStates.value[device.id] == "CONNECTED",
+                connected = isConnected,
                 batteryPercent = if (device.batteryFromRadar && !useRadarBattery) null else device.batteryPercent,
                 batteryFromRadar = device.batteryFromRadar && useRadarBattery,
+                currentMode = actualMode,
             )
         }
     }
@@ -953,7 +995,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
             val currentProfileAssignments = engine.settings.lightAssignments
             for (assignment in currentProfileAssignments) {
-                if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
+                if (!assignment.enabled || !assignment.useForThreatMode) continue
 
                 val activeState = engine.activeState.value
                 val overrideActive = engine.settings.overrideActiveModes
@@ -963,6 +1005,31 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 val targetMode = assignment.softwareThreatMode
                 if (targetMode != "DISABLED") {
                     lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
+                }
+            }
+
+            threatVerificationJob?.cancel()
+            threatVerificationJob = extensionScope.launch {
+                repeat(2) { attempt ->
+                    delay(1000L)
+                    if (!isRadarThreatActive) return@launch
+
+                    val unconfirmed = currentProfileAssignments.filter { assignment ->
+                        if (!assignment.enabled || !assignment.useForThreatMode) return@filter false
+                        if (assignment.softwareThreatMode == "DISABLED") return@filter false
+                        val actual = discoveredLights.value.find { it.id == assignment.deviceId }?.currentMode
+                        actual != assignment.softwareThreatMode
+                    }
+
+                    if (unconfirmed.isEmpty()) {
+                        Timber.d("$TAG: 🎯 All threat lights confirmed in threat mode!")
+                        return@launch
+                    }
+
+                    Timber.d("$TAG: Threat mode unconfirmed for ${unconfirmed.size} lights (attempt ${attempt + 1}/2). Retrying...")
+                    for (assignment in unconfirmed) {
+                        lightControllers[assignment.protocol]?.setMode(assignment.deviceId, assignment.softwareThreatMode)
+                    }
                 }
             }
         } else {
@@ -993,10 +1060,36 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
                 val currentProfileAssignments = engine.settings.lightAssignments
                 for (assignment in currentProfileAssignments) {
-                    if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
+                    if (!assignment.enabled || !assignment.useForThreatMode) continue
                     val activeState = engine.activeState.value
                     val restoreMode = assignment.modeForState(activeState)
                     lightControllers[assignment.protocol]?.setMode(assignment.deviceId, restoreMode)
+                }
+
+                threatVerificationJob?.cancel()
+                threatVerificationJob = extensionScope.launch {
+                    repeat(2) { attempt ->
+                        delay(1000L)
+                        if (isRadarThreatActive) return@launch
+
+                        val unconfirmed = currentProfileAssignments.filter { assignment ->
+                            if (!assignment.enabled || !assignment.useForThreatMode) return@filter false
+                            val targetMode = assignment.modeForState(engine.activeState.value)
+                            val actual = discoveredLights.value.find { it.id == assignment.deviceId }?.currentMode
+                            actual != targetMode
+                        }
+
+                        if (unconfirmed.isEmpty()) {
+                            Timber.d("$TAG: 🎯 All threat lights confirmed restored to normal mode!")
+                            return@launch
+                        }
+
+                        Timber.d("$TAG: Normal mode unconfirmed for ${unconfirmed.size} lights after threat clear (attempt ${attempt + 1}/2). Retrying...")
+                        for (assignment in unconfirmed) {
+                            val targetMode = assignment.modeForState(engine.activeState.value)
+                            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
+                        }
+                    }
                 }
             }
         }

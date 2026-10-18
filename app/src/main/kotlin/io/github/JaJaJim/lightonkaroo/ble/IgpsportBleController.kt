@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.light.LightController
+import io.github.JaJaJim.lightonkaroo.protocol.FrameAssembler
 import io.github.JaJaJim.lightonkaroo.protocol.IgpsProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +14,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -59,9 +61,14 @@ class IgpsportBleController(context: Context) : LightController {
     private val characteristics = ConcurrentHashMap<String, RemoteCharacteristic>()
     private val deviceConfigs = ConcurrentHashMap<String, IgpsportDeviceConfig>()
     private val batteryLevelsRaw = ConcurrentHashMap<String, String>()
+    private val batteryLevels = ConcurrentHashMap<String, Int>()
+    private val frameAssemblers = ConcurrentHashMap<String, FrameAssembler>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
+
+    private val _actualModes = MutableStateFlow<Map<String, String>>(emptyMap())
+    val actualModes: StateFlow<Map<String, String>> = _actualModes
 
     var onDeviceConnected: (() -> Unit)? = null
     var assignedDeviceIds: Set<String> = emptySet()
@@ -80,8 +87,13 @@ class IgpsportBleController(context: Context) : LightController {
 
     fun queryRawBattery(address: String) {
         scope.launch {
-            Timber.d("$TAG: Querying raw battery for $address...")
-            writeBytes(address, IgpsProtocol.readBattery())
+            Timber.d("$TAG: Querying battery for $address...")
+            if (!characteristics.containsKey(address)) {
+                Timber.w("$TAG: Device $address not connected, attempting connection first...")
+                connect(address)
+                delay(1500)
+            }
+            sendFrame(address, IgpsProtocol.readBattery())
         }
     }
 
@@ -133,10 +145,14 @@ class IgpsportBleController(context: Context) : LightController {
         }
         try {
             val settings = android.bluetooth.le.ScanSettings.Builder()
-                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED)
                 .build()
             scanner.startScan(null, settings, callback)
             scanCallback = callback
+            scope.launch {
+                delay(10_000L)
+                stopDiscovery()
+            }
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to start iGPSPORT BLE scan")
         }
@@ -171,14 +187,36 @@ class IgpsportBleController(context: Context) : LightController {
         scanCallback = null
     }
 
+    private val failureCounts = ConcurrentHashMap<String, Int>()
+
+    fun resetBackoff(address: String? = null) {
+        if (address != null) {
+            failureCounts[address] = 0
+        } else {
+            failureCounts.clear()
+        }
+    }
+
     private fun startConnectionSupervisor(address: String) {
         if (connectionJobs[address]?.isActive == true) return
         connectionJobs[address] = scope.launch {
-            var backoff = RECONNECT_MIN_MS
             while (isActive && (address in assignedDeviceIds || isSettingsUiActive)) {
                 val wasConnected = attemptConnect(address)
-                backoff = if (wasConnected) RECONNECT_MIN_MS else minOf(backoff * 2, RECONNECT_MAX_MS)
-                delay(backoff)
+                if (wasConnected) {
+                    failureCounts[address] = 0
+                } else {
+                    val current = failureCounts[address] ?: 0
+                    failureCounts[address] = current + 1
+                }
+
+                val failures = failureCounts[address] ?: 0
+                val delayMs = when {
+                    failures <= 3 -> 3_000L
+                    failures <= 6 -> 10_000L
+                    else -> 60_000L
+                }
+
+                delay(delayMs)
             }
             connectionJobs.remove(address)
         }
@@ -188,6 +226,9 @@ class IgpsportBleController(context: Context) : LightController {
         connectionJobs.remove(address)?.cancel()
         characteristics.remove(address)
         batteryLevelsRaw.remove(address)
+        batteryLevels.remove(address)
+        frameAssemblers.remove(address)
+        failureCounts.remove(address)
         updateDiscoveredLights()
     }
 
@@ -205,6 +246,7 @@ class IgpsportBleController(context: Context) : LightController {
         deviceConfigs.putIfAbsent(address, IgpsportDeviceConfig())
 
         return try {
+            stopDiscovery()
             Timber.d("$TAG: Connecting to iGPSPORT light at $address ($name)")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
@@ -240,15 +282,20 @@ class IgpsportBleController(context: Context) : LightController {
                 }
             }
 
-            // Give 2.0s buffer after GATT connection & service discovery before querying battery
-            delay(2000)
-            Timber.d("$TAG: Sending immediate readBattery query to iGPSPORT $address...")
-            writeBytes(address, IgpsProtocol.readBattery())
+            val batteryPollJob = scope.launch {
+                delay(2000)
+                while (isActive) {
+                    Timber.d("$TAG: Querying battery for iGPSPORT $address (periodic 60s poll)...")
+                    sendFrame(address, IgpsProtocol.readBattery())
+                    delay(60_000L)
+                }
+            }
 
             updateDiscoveredLights()
             onDeviceConnected?.invoke()
 
             peripheral.state.first { it is ConnectionState.Disconnected }
+            batteryPollJob.cancel()
             notifyJob.cancel()
             Timber.d("$TAG: Disconnected from iGPSPORT light $address")
             true
@@ -258,6 +305,8 @@ class IgpsportBleController(context: Context) : LightController {
         } finally {
             characteristics.remove(address)
             batteryLevelsRaw.remove(address)
+            batteryLevels.remove(address)
+            frameAssemblers.remove(address)
             updateDiscoveredLights()
         }
     }
@@ -307,8 +356,9 @@ class IgpsportBleController(context: Context) : LightController {
                 manufacturer = "iGPSPORT",
                 protocol = LightProtocol.IGPSPORT_BLE,
                 connected = characteristics.containsKey(address),
-                batteryPercent = null, // Disconnected from data field
+                batteryPercent = batteryLevels[address],
                 rawBatteryHex = batteryLevelsRaw[address],
+                currentMode = _actualModes.value[address],
             )
         }.toList()
         _discoveredLights.value = newList
@@ -316,10 +366,51 @@ class IgpsportBleController(context: Context) : LightController {
 
     private fun parseNotification(address: String, data: ByteArray) {
         if (data.isEmpty()) return
-        val hex = IgpsportProtocol.bytesToHex(data)
-        Timber.d("$TAG: 📩 Raw Notification from iGPSPORT $address: $hex")
+        val rawHex = IgpsportProtocol.bytesToHex(data)
+        Timber.d("$TAG: 📩 GATT Notification from iGPSPORT $address (${data.size} bytes): $rawHex")
 
-        batteryLevelsRaw[address] = hex
+        val assembler = frameAssemblers.getOrPut(address) { FrameAssembler() }
+        val frames = assembler.push(data)
+
+        val framesToProcess = if (frames.isNotEmpty()) {
+            frames
+        } else if (data.size >= IgpsProtocol.HEADER_LEN && IgpsProtocol.headerValid(data)) {
+            listOf(data)
+        } else {
+            emptyList()
+        }
+
+        if (framesToProcess.isEmpty()) {
+            Timber.d("$TAG: Notification fragment buffered or invalid CRC: $rawHex")
+        }
+
+        for (frame in framesToProcess) {
+            val update = IgpsProtocol.parseFrame(frame)
+            Timber.d("$TAG: 🔍 Parsed frame for $address -> $update (raw: ${IgpsportProtocol.bytesToHex(frame)})")
+            if (update != null) {
+                val bat = update.batteryPercent ?: update.auxBatteryPercent
+                if (bat != null && bat in 1..100) {
+                    Timber.d("$TAG: 🔋 SUCCESS! Parsed battery level for $address: $bat%")
+                    batteryLevels[address] = bat
+                    batteryLevelsRaw[address] = "${IgpsportProtocol.bytesToHex(frame)} -> $bat%"
+                }
+                if (update.mode != null) {
+                    val modeStr = when (update.mode) {
+                        0 -> "OFF"
+                        64 -> "CUSTOM_1"
+                        65 -> "CUSTOM_2"
+                        66 -> "CUSTOM_3"
+                        else -> "MODE_${update.mode}"
+                    }
+                    _actualModes.update { it + (address to modeStr) }
+                }
+            }
+        }
+
+        if (batteryLevelsRaw[address] == null) {
+            batteryLevelsRaw[address] = rawHex
+        }
+
         updateDiscoveredLights()
     }
 
@@ -335,14 +426,10 @@ class IgpsportBleController(context: Context) : LightController {
         val dimFrame = IgpsportProtocol.buildAutoDimmingCommand(autoDimForMode)
         val combinedFrame = frame + dimFrame
 
-        val chunks = IgpsProtocol.chunks(combinedFrame)
-        Timber.d("$TAG: setMode($deviceId, $modeName, autoDim=$autoDimForMode) -> ${chunks.size} chunks: ${IgpsportProtocol.bytesToHex(combinedFrame)}")
-        scope.launch {
-            for (chunk in chunks) {
-                writeBytes(deviceId, chunk)
-                delay(20)
-            }
-        }
+        _actualModes.update { it + (deviceId to modeName) }
+        Timber.d("$TAG: setMode($deviceId, $modeName, autoDim=$autoDimForMode)")
+        scope.launch { sendFrame(deviceId, combinedFrame) }
+        updateDiscoveredLights()
     }
 
     fun setAutoDimmingForSlot(address: String, slotNumber: Int, enabled: Boolean) {
@@ -354,26 +441,14 @@ class IgpsportBleController(context: Context) : LightController {
         }
         deviceConfigs[address] = updatedConfig
         val command = IgpsportProtocol.buildAutoDimmingCommand(enabled)
-        scope.launch {
-            val chunks = IgpsProtocol.chunks(command)
-            for (chunk in chunks) {
-                writeBytes(address, chunk)
-                delay(20)
-            }
-        }
+        scope.launch { sendFrame(address, command) }
     }
 
     fun setLowBatterySave(address: String, enabled: Boolean) {
         val config = getDeviceConfig(address)
         deviceConfigs[address] = config.copy(lowBatterySaveEnabled = enabled)
         val command = IgpsportProtocol.buildLowBatterySaveCommand(enabled)
-        scope.launch {
-            val chunks = IgpsProtocol.chunks(command)
-            for (chunk in chunks) {
-                writeBytes(address, chunk)
-                delay(20)
-            }
-        }
+        scope.launch { sendFrame(address, command) }
     }
 
     fun setCustomModeConfig(
@@ -383,15 +458,30 @@ class IgpsportBleController(context: Context) : LightController {
         highBeamPct: Int,
         lowBeamPct: Int,
     ) {
-        val command = IgpsportProtocol.buildCustomModeConfigCommand(
+        val command = IgpsportProtocol.buildCustomModeConfigCommandDualBeam(
             slotNumber, patternType, highBeamPct, lowBeamPct
         )
-        scope.launch {
-            val chunks = IgpsProtocol.chunks(command)
-            for (chunk in chunks) {
-                writeBytes(address, chunk)
-                delay(20)
-            }
+        scope.launch { sendFrame(address, command) }
+    }
+
+    fun setCustomModeConfigSingleBeam(
+        address: String,
+        slotNumber: Int,
+        patternType: Int,
+        mainPct: Int,
+    ) {
+        val command = IgpsportProtocol.buildCustomModeConfigCommandSingleBeam(
+            slotNumber, patternType, mainPct
+        )
+        scope.launch { sendFrame(address, command) }
+    }
+
+    private suspend fun sendFrame(address: String, frame: ByteArray) {
+        val chunks = IgpsProtocol.chunks(frame)
+        Timber.d("$TAG: Sending frame to $address in ${chunks.size} chunks (${frame.size} bytes): ${IgpsportProtocol.bytesToHex(frame)}")
+        for (chunk in chunks) {
+            writeBytes(address, chunk)
+            delay(75)
         }
     }
 

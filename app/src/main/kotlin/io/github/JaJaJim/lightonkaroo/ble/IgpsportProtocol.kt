@@ -33,7 +33,7 @@ object IgpsportProtocol {
         return IgpsProtocol.setSmartConfig(SmartConfig.AUTO_LOWBAT, status)
     }
 
-    fun buildCustomModeConfigCommand(
+    fun buildCustomModeConfigCommandDualBeam(
         slotNumber: Int, // 1, 2, or 3
         patternType: Int, // 0: Steady, 1: Flash, 2: Breath
         highBeamPct: Int, // 0 to 100
@@ -48,6 +48,20 @@ object IgpsportProtocol {
         val f2 = IgpsProtocol.modifyCustomMode(slot, changeHigh)
         val f3 = IgpsProtocol.modifyCustomMode(slot, changeLow)
         return f1 + f2 + f3
+    }
+
+    fun buildCustomModeConfigCommandSingleBeam(
+        slotNumber: Int, // 1, 2, or 3
+        patternType: Int, // 0: Steady, 1: Flash, 2: Breath
+        mainPct: Int, // 0 to 100
+    ): ByteArray {
+        val slot = 63 + slotNumber.coerceIn(1, 3)
+        val changePattern = CustomChange.Pattern(patternType)
+        val changeMain = CustomChange.Brightness(patternType, CustomMode.MAIN, mainPct.coerceIn(0, 100))
+
+        val f1 = IgpsProtocol.modifyCustomMode(slot, changePattern)
+        val f2 = IgpsProtocol.modifyCustomMode(slot, changeMain)
+        return f1 + f2
     }
 
     fun buildQueryBattery(): ByteArray = IgpsProtocol.readBattery()
