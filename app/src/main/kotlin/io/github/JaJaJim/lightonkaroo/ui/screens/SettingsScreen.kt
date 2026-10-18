@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import io.github.JaJaJim.lightonkaroo.BuildConfig
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.R
+import io.github.JaJaJim.lightonkaroo.data.CustomSlotConfig
 import io.github.JaJaJim.lightonkaroo.data.LightAssignment
 import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
 import io.github.JaJaJim.lightonkaroo.data.LightModeOption
@@ -673,6 +674,11 @@ private fun LightCard(
         newModeOff: String = modeOff,
         newUseForThreatMode: Boolean = useForThreatMode,
         newSoftwareThreatMode: String = softwareThreatMode,
+        newShowCustomProfiles: Boolean = assignment?.showCustomProfiles ?: false,
+        newLowBatterySaveEnabled: Boolean = assignment?.lowBatterySaveEnabled ?: false,
+        newCustomSlot1: CustomSlotConfig = assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false),
+        newCustomSlot2: CustomSlotConfig = assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false),
+        newCustomSlot3: CustomSlotConfig = assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false),
     ) {
         onUpdateAssignment(
             LightAssignment(
@@ -687,6 +693,11 @@ private fun LightCard(
                 modeOff = newModeOff,
                 softwareThreatMode = newSoftwareThreatMode,
                 nickname = newNickname,
+                showCustomProfiles = newShowCustomProfiles,
+                lowBatterySaveEnabled = newLowBatterySaveEnabled,
+                customSlot1 = newCustomSlot1,
+                customSlot2 = newCustomSlot2,
+                customSlot3 = newCustomSlot3,
             ),
         )
     }
@@ -854,8 +865,7 @@ private fun LightCard(
 
             if (isIgpsport) {
                 val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
-                val igpConfig = igpController?.getDeviceConfig(light.id)
-                var lowBatterySave by remember(light.id) { mutableStateOf(igpConfig?.lowBatterySaveEnabled ?: false) }
+                val lowBatterySave = assignment?.lowBatterySaveEnabled ?: false
 
                 val nameUpper = ((assignment?.deviceName ?: "") + " " + light.name).uppercase()
                 val isExplicitSingleBeam = nameUpper.contains("1200") || (nameUpper.contains("800") && !nameUpper.contains("1800")) || nameUpper.contains("500")
@@ -883,7 +893,7 @@ private fun LightCard(
                         Switch(
                             checked = lowBatterySave,
                             onCheckedChange = { active ->
-                                lowBatterySave = active
+                                save(newLowBatterySaveEnabled = active)
                                 igpController?.setLowBatterySave(light.id, active)
                             },
                         )
@@ -891,7 +901,7 @@ private fun LightCard(
                 }
 
                 HorizontalDivider()
-                var showCustomProfiles by remember(light.id) { mutableStateOf(true) }
+                val showCustomProfiles = assignment?.showCustomProfiles ?: false
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -908,18 +918,34 @@ private fun LightCard(
                     }
                     Switch(
                         checked = showCustomProfiles,
-                        onCheckedChange = { showCustomProfiles = it },
+                        onCheckedChange = { active ->
+                            save(newShowCustomProfiles = active)
+                        },
                     )
                 }
 
                 if (showCustomProfiles) {
                     Spacer(modifier = Modifier.height(4.dp))
                     for (slot in 1..3) {
-                        var highBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
-                        var lowBeamPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
-                        var mainPct by remember(light.id, slot) { mutableStateOf(if (slot == 1) 100 else if (slot == 2) 50 else 25) }
-                        var patternType by remember(light.id, slot) { mutableStateOf(0) } // 0: Steady, 1: Flash, 2: Breath
-                        var slotAutoDim by remember(light.id, slot) { mutableStateOf(false) }
+                        val slotConfig = when (slot) {
+                            1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
+                            2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
+                            else -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
+                        }
+
+                        fun saveSlot(updatedConfig: CustomSlotConfig) {
+                            when (slot) {
+                                1 -> save(newCustomSlot1 = updatedConfig)
+                                2 -> save(newCustomSlot2 = updatedConfig)
+                                else -> save(newCustomSlot3 = updatedConfig)
+                            }
+                        }
+
+                        val highBeamPct = slotConfig.highBeamPct
+                        val lowBeamPct = slotConfig.lowBeamPct
+                        val mainPct = slotConfig.mainPct
+                        val patternType = slotConfig.patternType
+                        val slotAutoDim = slotConfig.autoDimming
 
                         Column(
                             modifier = Modifier
@@ -940,7 +966,7 @@ private fun LightCard(
                                     Switch(
                                         checked = slotAutoDim,
                                         onCheckedChange = { active ->
-                                            slotAutoDim = active
+                                            saveSlot(slotConfig.copy(autoDimming = active))
                                             igpController?.setAutoDimmingForSlot(light.id, slot, active)
                                         },
                                     )
@@ -956,11 +982,12 @@ private fun LightCard(
                                     "2" to "Breath",
                                 ),
                                 onSelected = { selected ->
-                                    patternType = selected.toIntOrNull() ?: 0
+                                    val newPattern = selected.toIntOrNull() ?: 0
+                                    saveSlot(slotConfig.copy(patternType = newPattern))
                                     if (isDualBeam) {
-                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                        igpController?.setCustomModeConfig(light.id, slot, newPattern, highBeamPct, lowBeamPct)
                                     } else {
-                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
+                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, newPattern, mainPct)
                                     }
                                 },
                             )
@@ -973,8 +1000,8 @@ private fun LightCard(
                                     step = 1,
                                     unit = "%",
                                     onSaveValue = { pct ->
-                                        highBeamPct = pct
-                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                        saveSlot(slotConfig.copy(highBeamPct = pct))
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, pct, lowBeamPct)
                                     },
                                 )
 
@@ -985,8 +1012,8 @@ private fun LightCard(
                                     step = 1,
                                     unit = "%",
                                     onSaveValue = { pct ->
-                                        lowBeamPct = pct
-                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                        saveSlot(slotConfig.copy(lowBeamPct = pct))
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, pct)
                                     },
                                 )
                             } else {
@@ -997,8 +1024,8 @@ private fun LightCard(
                                     step = 1,
                                     unit = "%",
                                     onSaveValue = { pct ->
-                                        mainPct = pct
-                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
+                                        saveSlot(slotConfig.copy(mainPct = pct))
+                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, pct)
                                     },
                                 )
                             }

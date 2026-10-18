@@ -13,6 +13,16 @@ enum class LightRole { FRONT, REAR }
 enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE }
 
 @Serializable
+data class CustomSlotConfig(
+    val slotNumber: Int = 1,
+    val patternType: Int = 0, // 0: Steady, 1: Flash, 2: Breath
+    val highBeamPct: Int = 100,
+    val lowBeamPct: Int = 100,
+    val mainPct: Int = 100,
+    val autoDimming: Boolean = false,
+)
+
+@Serializable
 data class LightAssignment(
     val deviceId: String,
     val deviceName: String,
@@ -27,6 +37,11 @@ data class LightAssignment(
     val threatModeYellow: String = "FAST_FLASH",
     val threatModeRed: String = "FAST_FLASH",
     val nickname: String = "",
+    val showCustomProfiles: Boolean = false,
+    val lowBatterySaveEnabled: Boolean = false,
+    val customSlot1: CustomSlotConfig = CustomSlotConfig(1, 0, 100, 100, 100, false),
+    val customSlot2: CustomSlotConfig = CustomSlotConfig(2, 0, 50, 50, 50, false),
+    val customSlot3: CustomSlotConfig = CustomSlotConfig(3, 0, 25, 25, 25, false),
 ) {
     val isThreatModeEnabled: Boolean
         get() = enabled && useForThreatMode
