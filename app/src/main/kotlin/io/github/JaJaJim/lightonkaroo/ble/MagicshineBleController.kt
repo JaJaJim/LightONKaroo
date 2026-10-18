@@ -111,6 +111,8 @@ class MagicshineBleController(context: Context) : LightController {
                     val rawName = result.scanRecord?.deviceName ?: result.device?.name ?: return
                     val nameUpper = rawName.uppercase()
 
+                    if (nameUpper.contains("VS") || nameUpper.contains("IGP") || nameUpper.contains("IGPSPORT")) return
+
                     val isMagicshine = nameUpper.contains("MAGICSHINE") ||
                                        nameUpper.contains("M1") ||
                                        nameUpper.contains("M2") ||

@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 enum class LightRole { FRONT, REAR }
 
 @Serializable
-enum class LightProtocol { ANT_PLUS, BLE }
+enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE }
 
 @Serializable
 data class LightAssignment(
@@ -58,6 +58,21 @@ object AntPlusModeProvider : LightModeProvider {
         LightMode.FALLBACK_MODES.map { LightModeOption(it.karooName, it.displayName) }
 }
 
+object IgpsportDeviceModeProvider : LightModeProvider {
+    override fun availableModes(): List<LightModeOption> = listOf(
+        LightModeOption("OFF", "Off"),
+        LightModeOption("STEADY_100", "High (100%)"),
+        LightModeOption("STEADY_50", "Mid (50%)"),
+        LightModeOption("STEADY_25", "Low (25%)"),
+        LightModeOption("FLASH_100", "Flash Hi"),
+        LightModeOption("FLASH_50", "Flash Lo"),
+        LightModeOption("PULSE_100", "Pulse Hi"),
+        LightModeOption("CUSTOM_1", "Custom 1 (C1)"),
+        LightModeOption("CUSTOM_2", "Custom 2 (C2)"),
+        LightModeOption("CUSTOM_3", "Custom 3 (C3)"),
+    )
+}
+
 class DynamicAntPlusModeProvider(private val karooNames: Set<String>) : LightModeProvider {
     override fun availableModes(): List<LightModeOption> {
         val modes = karooNames.map { name ->
@@ -84,6 +99,7 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
         }
         if (supported != null && supported.isNotEmpty()) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
     }
+    LightProtocol.IGPSPORT_BLE -> IgpsportDeviceModeProvider
     LightProtocol.BLE -> {
         val config = deviceId?.let {
             KarooLightControllerExtension.getInstance()

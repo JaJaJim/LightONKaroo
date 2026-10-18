@@ -268,7 +268,7 @@ class IgpsportBleController(context: Context) : LightController {
                 id = address,
                 name = device.name,
                 manufacturer = "iGPSPORT",
-                protocol = LightProtocol.BLE,
+                protocol = LightProtocol.IGPSPORT_BLE,
                 connected = characteristics.containsKey(address),
                 batteryPercent = batteryLevels[address],
             )

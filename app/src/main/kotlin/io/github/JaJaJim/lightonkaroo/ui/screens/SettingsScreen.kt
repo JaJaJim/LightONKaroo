@@ -1,10 +1,12 @@
 package io.github.JaJaJim.lightonkaroo.ui.screens
 
+import android.view.KeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,11 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -39,7 +44,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.JaJaJim.lightonkaroo.BuildConfig
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
-import io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension
 import io.github.JaJaJim.lightonkaroo.R
 import io.github.JaJaJim.lightonkaroo.data.LightAssignment
 import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
@@ -395,25 +399,15 @@ private fun SoftwareThreatModeSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        var threatHoldSlider by remember(settings.threatHoldTimeSeconds) { mutableStateOf(settings.threatHoldTimeSeconds.toFloat()) }
-        Column {
-            Text(
-                "Threat Hold Time: ${threatHoldSlider.toInt()}s",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = threatHoldSlider,
-                onValueChange = { threatHoldSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(threatHoldTimeSeconds = threatHoldSlider.toInt())) },
-                valueRange = 0f..5f,
-                steps = 4, // 0, 1, 2, 3, 4, 5
-            )
-        }
+        StepperSlider(
+            label = "Threat Hold Time",
+            subtitle = "Keeps threat light active for X seconds after vehicles pass to extend warning visibility and prevent flickering in traffic.",
+            value = settings.threatHoldTimeSeconds,
+            range = 0..5,
+            step = 1,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(threatHoldTimeSeconds = it)) },
+        )
     }
 }
 
@@ -502,20 +496,14 @@ private fun RideControlSection(
 
     if (settings.showDetailedStatus) {
         Spacer(modifier = Modifier.height(16.dp))
-        var rotationSpeedSlider by remember(settings.rotationSpeedSeconds) { mutableStateOf(settings.rotationSpeedSeconds.toFloat()) }
-        Column {
-            Text(
-                "Rotation Speed: ${rotationSpeedSlider.toInt()}s",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = rotationSpeedSlider,
-                onValueChange = { rotationSpeedSlider = it },
-                onValueChangeFinished = { onSave(settings.copy(rotationSpeedSeconds = rotationSpeedSlider.toInt())) },
-                valueRange = 5f..30f,
-                steps = 4, // 5, 10, 15, 20, 25, 30
-            )
-        }
+        StepperSlider(
+            label = "Rotation Speed",
+            value = settings.rotationSpeedSeconds,
+            range = 5..30,
+            step = 5,
+            unit = "s",
+            onSaveValue = { onSave(settings.copy(rotationSpeedSeconds = it)) },
+        )
     }
 }
 
@@ -541,18 +529,97 @@ private fun DataFieldAppearanceSection(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    var glowIntensitySlider by remember(settings.glowIntensity) { mutableStateOf(settings.glowIntensity.toFloat()) }
-    Column {
-        Text(
-            "Ambient Side-Glow Intensity: ${glowIntensitySlider.toInt()}",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    StepperSlider(
+        label = "Ambient Side-Glow Intensity",
+        value = settings.glowIntensity,
+        range = 0..5,
+        step = 1,
+        unit = "",
+        onSaveValue = { onSave(settings.copy(glowIntensity = it)) },
+    )
+}
+
+@Composable
+private fun StepperSlider(
+    label: String,
+    subtitle: String? = null,
+    value: Int,
+    range: IntRange,
+    step: Int = 1,
+    unit: String = "",
+    onSaveValue: (Int) -> Unit,
+) {
+    var currentValue by remember(value) { mutableStateOf(value.coerceIn(range.first, range.last)) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue - step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("-", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                Text(
+                    if (unit.isNotEmpty()) "${currentValue}$unit" else "$currentValue",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val next = (currentValue + step).coerceIn(range.first, range.last)
+                        currentValue = next
+                        onSaveValue(next)
+                    },
+                    modifier = Modifier.size(36.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("+", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         Slider(
-            value = glowIntensitySlider,
-            onValueChange = { glowIntensitySlider = it },
-            onValueChangeFinished = { onSave(settings.copy(glowIntensity = glowIntensitySlider.toInt())) },
-            valueRange = 0f..5f,
-            steps = 4, // 0, 1, 2, 3, 4, 5
+            value = currentValue.toFloat(),
+            onValueChange = { currentValue = it.toInt() },
+            onValueChangeFinished = { onSaveValue(currentValue) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = if (((range.last - range.first) / step) > 1) ((range.last - range.first) / step) - 1 else 0,
         )
     }
 }
@@ -653,6 +720,7 @@ private fun LightCard(
 
             val protocolText = when (light.protocol) {
                 LightProtocol.ANT_PLUS -> "ANT+"
+                LightProtocol.IGPSPORT_BLE -> "iGPSPORT BLE"
                 LightProtocol.BLE -> "BLE"
             }
             val statusText = if (light.connected) "Connected" else "Not found"
@@ -703,7 +771,7 @@ private fun LightCard(
                 },
             )
 
-            val refresh: () -> Unit = { KarooLightControllerExtension.getInstance()?.lightControl?.forceRefreshLightParameters(light.id) }
+            val refresh: () -> Unit = { io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.lightControl?.forceRefreshLightParameters(light.id) }
 
             ModeRow(
                 label = "Primary ON Mode",
@@ -773,10 +841,14 @@ private fun LightCard(
                 }
             }
 
-            if (light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
-                val igpController = KarooLightControllerExtension.getInstance()?.igpsportController
+            if (light.protocol == LightProtocol.IGPSPORT_BLE || light.manufacturer == "iGPSPORT" || light.name.uppercase().contains("VS") || light.name.uppercase().contains("IGP")) {
+                HorizontalDivider()
+                Text("iGPSPORT Smart Features", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                val igpController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.igpsportController
                 val igpConfig = igpController?.getDeviceConfig(light.id)
                 var autoDimming by remember(light.id) { mutableStateOf(igpConfig?.autoDimmingEnabled ?: false) }
+                var lowBatterySave by remember(light.id) { mutableStateOf(false) }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -784,7 +856,7 @@ private fun LightCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Enable Light Sensor Auto-Dimming", style = MaterialTheme.typography.bodyMedium)
+                        Text("Enable Light Sensor Auto-Dimming", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Automatically adjusts brightness based on ambient light sensor",
                             style = MaterialTheme.typography.bodySmall,
@@ -798,6 +870,60 @@ private fun LightCard(
                         },
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Enable Low-Battery Power Saver", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Automatically switches to low-power flash when battery is critical",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = lowBatterySave,
+                        onCheckedChange = {
+                            lowBatterySave = it
+                        },
+                    )
+                }
+
+                HorizontalDivider()
+                Text("Custom Light Profiles (C1, C2, C3)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                var custom1Bright by remember(light.id) { mutableStateOf(100) }
+                StepperSlider(
+                    label = "Custom 1 (C1) Brightness",
+                    value = custom1Bright,
+                    range = 10..100,
+                    step = 10,
+                    unit = "%",
+                    onSaveValue = { custom1Bright = it },
+                )
+
+                var custom2Bright by remember(light.id) { mutableStateOf(50) }
+                StepperSlider(
+                    label = "Custom 2 (C2) Brightness",
+                    value = custom2Bright,
+                    range = 10..100,
+                    step = 10,
+                    unit = "%",
+                    onSaveValue = { custom2Bright = it },
+                )
+
+                var custom3Bright by remember(light.id) { mutableStateOf(25) }
+                StepperSlider(
+                    label = "Custom 3 (C3) Brightness",
+                    value = custom3Bright,
+                    range = 10..100,
+                    step = 10,
+                    unit = "%",
+                    onSaveValue = { custom3Bright = it },
+                )
             }
         }
     }

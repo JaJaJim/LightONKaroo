@@ -78,6 +78,7 @@ fun LightDetailDialog(
     val protocolLabel = when (light.protocol) {
         LightProtocol.ANT_PLUS -> "ANT+"
         LightProtocol.BLE -> "BLE"
+        LightProtocol.IGPSPORT_BLE -> "iGPSPORT BLE"
     }
     val connectionLabel = if (light.connected) "Connected" else "Not found"
 

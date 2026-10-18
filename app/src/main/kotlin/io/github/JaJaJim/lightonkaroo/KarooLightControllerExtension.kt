@@ -1,10 +1,5 @@
 package io.github.JaJaJim.lightonkaroo
 
-import android.bluetooth.BluetoothManager
-import android.bluetooth.le.BluetoothLeScanner
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.ble.IgpsportBleController
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
@@ -95,7 +90,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private var bleStartJob: Job? = null
     private var discoveryPollingJob: Job? = null
     private var displayRotationJob: Job? = null
-    private var unifiedScanCallback: ScanCallback? = null
+    private var unifiedScanCallback: android.bluetooth.le.ScanCallback? = null
 
     @Volatile private var settingsUiActive = false
     @Volatile private var rideActive = false
@@ -119,6 +114,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         lightControllers[LightProtocol.ANT_PLUS] = lightControl
         lightControllers[LightProtocol.BLE] = magicshineController
+        lightControllers[LightProtocol.IGPSPORT_BLE] = igpsportController
 
         magicshineController.onDeviceConnected = {
             stopBleIfNotNeeded()
@@ -142,12 +138,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 }
 
                 val modeName = assignment.modeForState(state)
-                val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                    igpsportController
-                } else {
-                    lightControllers[assignment.protocol]
-                }
-                controller?.setMode(assignment.deviceId, modeName)
+                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
             updateRadarMonitoring()
         }
@@ -155,12 +146,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         engine.onApplyHardwareOff = {
             for (assignment in engine.settings.lightAssignments) {
                 if (!assignment.enabled) continue
-                val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                    igpsportController
-                } else {
-                    lightControllers[assignment.protocol]
-                }
-                controller?.setMode(assignment.deviceId, "OFF")
+                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
         }
 
@@ -337,26 +323,24 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun syncBleAssignments() {
-        val assignedBle = engine.settings.lightAssignments
-            .filter { it.enabled && it.protocol == LightProtocol.BLE }
+        val assignments = engine.settings.lightAssignments.filter { it.enabled }
+        magicshineController.assignedDeviceIds = assignments
+            .filter { it.protocol == LightProtocol.BLE }
             .map { it.deviceId }
             .toSet()
 
-        magicshineController.assignedDeviceIds = assignedBle
-        igpsportController.assignedDeviceIds = assignedBle
+        igpsportController.assignedDeviceIds = assignments
+            .filter { it.protocol == LightProtocol.IGPSPORT_BLE }
+            .map { it.deviceId }
+            .toSet()
     }
 
     fun testMode(deviceId: String, modeName: String) {
         val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
-        val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-            igpsportController
-        } else {
-            lightControllers[assignment.protocol]
-        }
         extensionScope.launch {
-            controller?.setMode(deviceId, modeName)
+            lightControllers[assignment.protocol]?.setMode(deviceId, modeName)
             delay(3000)
-            controller?.setMode(deviceId, "OFF")
+            lightControllers[assignment.protocol]?.setMode(deviceId, "OFF")
         }
     }
 
@@ -364,18 +348,15 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         syncBleAssignments()
         for (id in magicshineController.assignedDeviceIds) {
             magicshineController.connect(id)
+        }
+        for (id in igpsportController.assignedDeviceIds) {
             igpsportController.connect(id)
         }
         startBleIfNeeded()
         updateRadarMonitoring()
         if (settingsUiActive) {
             for (assignment in engine.settings.lightAssignments) {
-                val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                    igpsportController
-                } else {
-                    lightControllers[assignment.protocol]
-                }
-                controller?.setMode(assignment.deviceId, "OFF")
+                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
         }
     }
@@ -394,12 +375,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             extensionScope.launch {
                 delay(500)
                 for (assignment in engine.settings.lightAssignments) {
-                    val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                        igpsportController
-                    } else {
-                        lightControllers[assignment.protocol]
-                    }
-                    controller?.setMode(assignment.deviceId, "OFF")
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
                 }
             }
         } else {
@@ -417,8 +393,10 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun allAssignedBleConnected(): Boolean {
-        val bleAssigned = magicshineController.assignedDeviceIds
-        return bleAssigned.isEmpty() || (magicshineController.allConnected(bleAssigned) || igpsportController.allConnected(bleAssigned))
+        val magicshineAssigned = magicshineController.assignedDeviceIds
+        val igpsportAssigned = igpsportController.assignedDeviceIds
+        return (magicshineAssigned.isEmpty() || magicshineController.allConnected(magicshineAssigned)) &&
+               (igpsportAssigned.isEmpty() || igpsportController.allConnected(igpsportAssigned))
     }
 
     private fun startDiscoveryPolling() {
@@ -442,7 +420,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.enabled && it.protocol == LightProtocol.BLE }
+        engine.settings.lightAssignments.any { it.enabled && (it.protocol == LightProtocol.BLE || it.protocol == LightProtocol.IGPSPORT_BLE) }
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
@@ -453,6 +431,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 karooSystem.dispatch(RequestBluetooth(extension))
                 for (id in magicshineController.assignedDeviceIds) {
                     magicshineController.connect(id)
+                }
+                for (id in igpsportController.assignedDeviceIds) {
                     igpsportController.connect(id)
                 }
                 if (settingsUiActive) {
@@ -466,8 +446,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private fun startUnifiedBleScan() {
         if (unifiedScanCallback != null) return
         extensionScope.launch {
-            val bluetoothManager = applicationContext.getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager
-            var scanner: BluetoothLeScanner? = null
+            val bluetoothManager = applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            var scanner: android.bluetooth.le.BluetoothLeScanner? = null
             for (attempt in 1..5) {
                 if (unifiedScanCallback != null) break
                 scanner = bluetoothManager?.adapter?.bluetoothLeScanner
@@ -476,34 +456,36 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             }
             if (scanner == null || unifiedScanCallback != null) return@launch
 
-            val callback = object : ScanCallback() {
-                override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val callback = object : android.bluetooth.le.ScanCallback() {
+                override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                     try {
                         val address = result.device?.address ?: return
                         val rawName = result.scanRecord?.deviceName ?: try { result.device?.name } catch (_: SecurityException) { null } ?: return
                         val nameUpper = rawName.uppercase()
 
-                        val isMagicshine = nameUpper.contains("MAGICSHINE") ||
-                                           nameUpper.contains("M1") ||
-                                           nameUpper.contains("M2") ||
-                                           nameUpper.contains("M3") ||
-                                           nameUpper.contains("HORI") ||
-                                           nameUpper.contains("EVO") ||
-                                           nameUpper.contains("CBL") ||
-                                           nameUpper.contains("RAY") ||
-                                           nameUpper.contains("SEEMEE") ||
-                                           nameUpper.contains("MONTEER")
-
                         val isIgpsport = nameUpper.contains("VS") ||
                                          nameUpper.contains("IGP") ||
                                          nameUpper.contains("IGPSPORT")
 
-                        if (isMagicshine) {
-                            Timber.d("$TAG: Unified BLE scan found Magicshine light: $rawName ($address)")
-                            magicshineController.registerFoundDevice(address, rawName)
-                        } else if (isIgpsport) {
+                        val isMagicshine = !isIgpsport && (
+                            nameUpper.contains("MAGICSHINE") ||
+                            nameUpper.contains("M1") ||
+                            nameUpper.contains("M2") ||
+                            nameUpper.contains("M3") ||
+                            nameUpper.contains("HORI") ||
+                            nameUpper.contains("EVO") ||
+                            nameUpper.contains("CBL") ||
+                            nameUpper.contains("RAY") ||
+                            nameUpper.contains("SEEMEE") ||
+                            nameUpper.contains("MONTEER")
+                        )
+
+                        if (isIgpsport) {
                             Timber.d("$TAG: Unified BLE scan found iGPSPORT light: $rawName ($address)")
                             igpsportController.registerFoundDevice(address, rawName)
+                        } else if (isMagicshine) {
+                            Timber.d("$TAG: Unified BLE scan found Magicshine light: $rawName ($address)")
+                            magicshineController.registerFoundDevice(address, rawName)
                         }
                     } catch (e: Exception) {
                         Timber.w(e, "$TAG: Skipping unified scan result")
@@ -516,8 +498,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             }
 
             try {
-                val settings = ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                val settings = android.bluetooth.le.ScanSettings.Builder()
+                    .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
                 scanner.startScan(null, settings, callback)
                 unifiedScanCallback = callback
@@ -533,8 +515,10 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private fun stopUnifiedBleScan() {
         unifiedScanCallback?.let { cb ->
             try {
-                val bluetoothManager = applicationContext.getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager
+                val bluetoothManager = applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
                 bluetoothManager?.adapter?.bluetoothLeScanner?.stopScan(cb)
+            } catch (e: SecurityException) {
+                Timber.w(e, "$TAG: Permission missing to stop unified BLE scan")
             } catch (e: Exception) {
                 Timber.w(e, "$TAG: Failed to stop unified BLE scan")
             }
@@ -977,12 +961,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
                 val targetMode = assignment.softwareThreatMode
                 if (targetMode != "DISABLED") {
-                    val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                        igpsportController
-                    } else {
-                        lightControllers[assignment.protocol]
-                    }
-                    controller?.setMode(assignment.deviceId, targetMode)
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
                 }
             }
         } else {
@@ -1016,12 +995,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     if (!assignment.enabled || !assignment.useForThreatMode || assignment.protocol != LightProtocol.ANT_PLUS) continue
                     val activeState = engine.activeState.value
                     val restoreMode = assignment.modeForState(activeState)
-                    val controller = if (assignment.deviceName.uppercase().contains("VS") || assignment.deviceName.uppercase().contains("IGP")) {
-                        igpsportController
-                    } else {
-                        lightControllers[assignment.protocol]
-                    }
-                    controller?.setMode(assignment.deviceId, restoreMode)
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, restoreMode)
                 }
             }
         }
