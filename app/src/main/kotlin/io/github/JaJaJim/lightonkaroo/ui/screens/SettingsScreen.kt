@@ -743,7 +743,7 @@ private fun LightCard(
                 LightProtocol.BLE -> "BLE"
             }
             val statusText = if (light.connected) "Connected" else "Not found"
-            val batteryText = light.batteryPercent?.let { " · Battery Level $it%" } ?: ""
+            val batteryText = light.batteryPercent?.let { "\nBattery Level $it%" } ?: ""
             Text(
                 text = "$protocolText · $statusText$batteryText",
                 style = MaterialTheme.typography.bodySmall,
