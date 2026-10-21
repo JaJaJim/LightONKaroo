@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -910,7 +911,9 @@ private fun LightCard(
                 val showCustomProfiles = assignment?.showCustomProfiles ?: false
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { save(newShowCustomProfiles = !showCustomProfiles) },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -922,12 +925,14 @@ private fun LightCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
-                        checked = showCustomProfiles,
-                        onCheckedChange = { active ->
-                            save(newShowCustomProfiles = active)
-                        },
-                    )
+                    IconButton(onClick = { save(newShowCustomProfiles = !showCustomProfiles) }) {
+                        Text(
+                            text = if (showCustomProfiles) "▲" else "▼",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
 
                 if (showCustomProfiles) {
@@ -1058,7 +1063,9 @@ private fun LightCard(
                 val showCustomProfiles = assignment?.showCustomProfiles ?: false
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { save(newShowCustomProfiles = !showCustomProfiles) },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1070,12 +1077,14 @@ private fun LightCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
-                        checked = showCustomProfiles,
-                        onCheckedChange = { active ->
-                            save(newShowCustomProfiles = active)
-                        },
-                    )
+                    IconButton(onClick = { save(newShowCustomProfiles = !showCustomProfiles) }) {
+                        Text(
+                            text = if (showCustomProfiles) "▲" else "▼",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
 
                 if (showCustomProfiles) {
