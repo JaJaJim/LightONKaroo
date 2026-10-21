@@ -58,7 +58,12 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 📝 Changelog
 ### v0.1.6-R2 "iGPSport"
+- **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**:
+  - Expanded Custom Light Profiles to **6 Custom Slots** for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`).
+  - Magicshine Custom Slots support stufenlose 0–100% brightness sliders with Pattern Type selection (Steady, Flash, SOS), allowing custom presets to be mapped to Primary ON, Secondary ON, and Software Threat Mode.
+  - Simplified Magicshine mode dropdown to `OFF` + `Custom 1..6`.
 - **iGPSPORT MODEL FALLBACK FIX**: Fixed iGPSPORT model detection to default to **VS1800S** dual-beam controls (High Beam & Low Beam) after Karoo reboot or fresh install, preventing controls from defaulting to single-beam mode when device name is temporarily unresolved.
+- **PERSISTENT CUSTOM PROFILES**: All Custom Slot sliders, pattern selections, auto-dimming toggles, low-battery power saver switches, and collapsed/expanded UI states are permanently persisted in `light_assignments.json` across device reboots.
 
 ### v0.1.6 "iGPSport"
 - **iGPSPORT BLE SMART LIGHT INTEGRATION**:

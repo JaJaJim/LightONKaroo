@@ -146,5 +146,13 @@ data class MagicshineDeviceConfig(
 }
 
 class MagicshineDeviceModeProvider(private val config: MagicshineDeviceConfig) : LightModeProvider {
-    override fun availableModes(): List<LightModeOption> = config.modes
+    override fun availableModes(): List<LightModeOption> = listOf(
+        LightModeOption("OFF", "Off"),
+        LightModeOption("CUSTOM_1", "Custom 1"),
+        LightModeOption("CUSTOM_2", "Custom 2"),
+        LightModeOption("CUSTOM_3", "Custom 3"),
+        LightModeOption("CUSTOM_4", "Custom 4"),
+        LightModeOption("CUSTOM_5", "Custom 5"),
+        LightModeOption("CUSTOM_6", "Custom 6"),
+    )
 }

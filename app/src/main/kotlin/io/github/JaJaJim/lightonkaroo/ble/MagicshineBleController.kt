@@ -364,7 +364,32 @@ class MagicshineBleController(context: Context) : LightController {
 
     override fun setMode(deviceId: String, modeName: String) {
         val config = deviceConfigs.getOrPut(deviceId) { MagicshineDeviceConfig.forDevice("Magicshine") }
-        val command = config.buildCommand(modeName)
+        val command = if (modeName == "OFF") {
+            config.buildCommand("OFF")
+        } else if (modeName.startsWith("CUSTOM_")) {
+            val slotNum = modeName.substringAfter("CUSTOM_").toIntOrNull() ?: 1
+            val assignment = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+                ?.engine?.settings?.lightAssignments?.find { it.deviceId == deviceId }
+            val slotConfig = when (slotNum) {
+                1 -> assignment?.customSlot1
+                2 -> assignment?.customSlot2
+                3 -> assignment?.customSlot3
+                4 -> assignment?.customSlot4
+                5 -> assignment?.customSlot5
+                else -> assignment?.customSlot6
+            }
+            val patternType = slotConfig?.patternType ?: 0
+            val bright = slotConfig?.mainPct ?: 100
+            val prefix = when (patternType) {
+                1 -> "FLASH"
+                2 -> "SOS"
+                else -> "STEADY"
+            }
+            config.buildCommand("${prefix}_${bright}")
+        } else {
+            config.buildCommand(modeName)
+        }
+
         if (command == null) {
             Timber.w("$TAG: Unknown mode: $modeName for device $deviceId")
             return

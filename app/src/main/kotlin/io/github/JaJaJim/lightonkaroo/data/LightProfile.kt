@@ -42,6 +42,9 @@ data class LightAssignment(
     val customSlot1: CustomSlotConfig = CustomSlotConfig(1, 0, 100, 100, 100, false),
     val customSlot2: CustomSlotConfig = CustomSlotConfig(2, 0, 50, 50, 50, false),
     val customSlot3: CustomSlotConfig = CustomSlotConfig(3, 0, 25, 25, 25, false),
+    val customSlot4: CustomSlotConfig = CustomSlotConfig(4, 0, 20, 20, 20, false),
+    val customSlot5: CustomSlotConfig = CustomSlotConfig(5, 0, 15, 15, 15, false),
+    val customSlot6: CustomSlotConfig = CustomSlotConfig(6, 0, 10, 10, 10, false),
 ) {
     val isThreatModeEnabled: Boolean
         get() = enabled && useForThreatMode
@@ -79,6 +82,9 @@ object IgpsportDeviceModeProvider : LightModeProvider {
         LightModeOption("CUSTOM_1", "Custom 1"),
         LightModeOption("CUSTOM_2", "Custom 2"),
         LightModeOption("CUSTOM_3", "Custom 3"),
+        LightModeOption("CUSTOM_4", "Custom 4"),
+        LightModeOption("CUSTOM_5", "Custom 5"),
+        LightModeOption("CUSTOM_6", "Custom 6"),
     )
 }
 

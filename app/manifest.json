@@ -7,5 +7,5 @@
   "latestVersionCode": 23,
   "developer": "Peter Weber",
   "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode and iGPSPORT smart light support.",
-  "releaseNotes": "* v0.1.6-R2: Fixed iGPSPORT VS1800S dual-beam controls fallback after device reboot / fresh install\n* iGPSPORT BLE Smart Light Integration: Full support for VS1800S (Dual Beam) & VS1200S/VS800S/VS500 (Single Beam)\n* ANT+ Light Command AIDL Fix: Dynamic descriptor discovery (LightCommandConnectionAIDL at TX 18) restoring full ANT+ control\n* Ravemen FR300 pre-OFF mode filtering: Prevents status sticking when light is turned OFF\n* BLE Stack & Battery Optimization: SCAN_MODE_BALANCED with 10s auto-timeout and adaptive reconnection backoff"
+  "releaseNotes": "* Magicshine & iGPSPORT 6 Custom Slots: 6 Custom Slots with 0-100% sliders, pattern selection (Steady, Flash, SOS/Breath) & disk persistence\n* v0.1.6-R2: Fixed iGPSPORT VS1800S dual-beam controls fallback after device reboot / fresh install\n* iGPSPORT BLE Smart Light Integration: Full support for VS1800S (Dual Beam) & VS1200S/VS800S/VS500 (Single Beam)\n* ANT+ Light Command AIDL Fix: Dynamic descriptor discovery (LightCommandConnectionAIDL at TX 18) restoring full ANT+ control\n* Ravemen FR300 pre-OFF mode filtering: Prevents status sticking when light is turned OFF"
 }

@@ -679,6 +679,9 @@ private fun LightCard(
         newCustomSlot1: CustomSlotConfig = assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false),
         newCustomSlot2: CustomSlotConfig = assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false),
         newCustomSlot3: CustomSlotConfig = assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false),
+        newCustomSlot4: CustomSlotConfig = assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false),
+        newCustomSlot5: CustomSlotConfig = assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false),
+        newCustomSlot6: CustomSlotConfig = assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false),
     ) {
         onUpdateAssignment(
             LightAssignment(
@@ -698,6 +701,9 @@ private fun LightCard(
                 customSlot1 = newCustomSlot1,
                 customSlot2 = newCustomSlot2,
                 customSlot3 = newCustomSlot3,
+                customSlot4 = newCustomSlot4,
+                customSlot5 = newCustomSlot5,
+                customSlot6 = newCustomSlot6,
             ),
         )
     }
@@ -926,18 +932,24 @@ private fun LightCard(
 
                 if (showCustomProfiles) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    for (slot in 1..3) {
+                    for (slot in 1..6) {
                         val slotConfig = when (slot) {
                             1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
                             2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
-                            else -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
+                            3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
+                            4 -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
+                            5 -> assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false)
+                            else -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
                         }
 
                         fun saveSlot(updatedConfig: CustomSlotConfig) {
                             when (slot) {
                                 1 -> save(newCustomSlot1 = updatedConfig)
                                 2 -> save(newCustomSlot2 = updatedConfig)
-                                else -> save(newCustomSlot3 = updatedConfig)
+                                3 -> save(newCustomSlot3 = updatedConfig)
+                                4 -> save(newCustomSlot4 = updatedConfig)
+                                5 -> save(newCustomSlot5 = updatedConfig)
+                                else -> save(newCustomSlot6 = updatedConfig)
                             }
                         }
 
@@ -1030,7 +1042,103 @@ private fun LightCard(
                                 )
                             }
                         }
-                        if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
+                        if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+
+            val isMagicshine = !isIgpsport && (
+                light.protocol == LightProtocol.BLE ||
+                light.manufacturer?.uppercase()?.contains("MAGICSHINE") == true ||
+                assignment?.protocol == LightProtocol.BLE
+            )
+
+            if (isMagicshine) {
+                HorizontalDivider()
+                val showCustomProfiles = assignment?.showCustomProfiles ?: false
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Custom Light Profiles", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Configure custom light slots and brightness levels",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = showCustomProfiles,
+                        onCheckedChange = { active ->
+                            save(newShowCustomProfiles = active)
+                        },
+                    )
+                }
+
+                if (showCustomProfiles) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    for (slot in 1..6) {
+                        val slotConfig = when (slot) {
+                            1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
+                            2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
+                            3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
+                            4 -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
+                            5 -> assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false)
+                            else -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                        }
+
+                        fun saveSlot(updatedConfig: CustomSlotConfig) {
+                            when (slot) {
+                                1 -> save(newCustomSlot1 = updatedConfig)
+                                2 -> save(newCustomSlot2 = updatedConfig)
+                                3 -> save(newCustomSlot3 = updatedConfig)
+                                4 -> save(newCustomSlot4 = updatedConfig)
+                                5 -> save(newCustomSlot5 = updatedConfig)
+                                else -> save(newCustomSlot6 = updatedConfig)
+                            }
+                        }
+
+                        val mainPct = slotConfig.mainPct
+                        val patternType = slotConfig.patternType
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("Custom Slot $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+
+                            InlineDropdown(
+                                label = "Pattern Type",
+                                selectedId = patternType.toString(),
+                                options = listOf(
+                                    "0" to "Steady",
+                                    "1" to "Flash",
+                                    "2" to "SOS",
+                                ),
+                                onSelected = { selected ->
+                                    val newPattern = selected.toIntOrNull() ?: 0
+                                    saveSlot(slotConfig.copy(patternType = newPattern))
+                                },
+                            )
+
+                            StepperSlider(
+                                label = "Brightness",
+                                value = mainPct,
+                                range = 0..100,
+                                step = 1,
+                                unit = "%",
+                                onSaveValue = { pct ->
+                                    saveSlot(slotConfig.copy(mainPct = pct))
+                                },
+                            )
+                        }
+                        if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }

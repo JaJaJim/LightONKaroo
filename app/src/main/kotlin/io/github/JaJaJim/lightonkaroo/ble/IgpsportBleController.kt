@@ -432,6 +432,9 @@ class IgpsportBleController(context: Context) : LightController {
                         64 -> "CUSTOM_1"
                         65 -> "CUSTOM_2"
                         66 -> "CUSTOM_3"
+                        67 -> "CUSTOM_4"
+                        68 -> "CUSTOM_5"
+                        69 -> "CUSTOM_6"
                         else -> "MODE_${update.mode}"
                     }
                     _actualModes.update { it + (address to modeStr) }
