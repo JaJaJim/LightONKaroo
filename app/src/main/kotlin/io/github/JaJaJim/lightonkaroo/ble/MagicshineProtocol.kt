@@ -154,5 +154,6 @@ class MagicshineDeviceModeProvider(private val config: MagicshineDeviceConfig) :
         LightModeOption("CUSTOM_4", "Custom 4"),
         LightModeOption("CUSTOM_5", "Custom 5"),
         LightModeOption("CUSTOM_6", "Custom 6"),
+        LightModeOption("CUSTOM_7", "Custom 7"),
     )
 }

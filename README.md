@@ -58,8 +58,11 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 📝 Changelog
 ### v0.1.6-R3 "iGPSport"
+- **MAGENE BLE SMART LIGHT INTEGRATION**:
+  - **Dedicated Magene BLE Stack**: Independent Bluetooth controller (`MageneBleController`) supporting Magene AT1200, AT1600 & L508 smart lights over Bluetooth LE.
+  - **7 Custom Slots (0-100% Sliders)**: Configurable `Custom 1` through `Custom 7` with stepless 0–100% brightness sliders and pattern selection (Steady, Flash, SOS/Pulse), persisted permanently in `light_assignments.json`.
 - **DYNAMIC KAROO OS DAY/NIGHT MODE CONTRAST**: Automatic text and accent color switching for high-contrast crisp black text (`#1C1B1F`) in Day Mode (Light Theme) and glowing white text (`#FFFFFF`) in Night Mode (Dark Theme).
-- **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**: 6 Custom Slots for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`) with stepless 0–100% sliders and pattern type selection (Steady, Flash, SOS/Breath), saved permanently in `light_assignments.json`.
+- **MAGICSHINE & IGPSPORT 7 CUSTOM SLOTS**: 7 Custom Slots for iGPSPORT, Magicshine & Magene lights (`Custom 1..7`) with stepless 0–100% sliders and pattern type selection.
 - **UI POLISH & EXPAND ARROW ICON**: Replaced Custom Profiles switch with an intuitive `▼` / `▲` expand/collapse arrow icon, formatted battery level cleanly onto a dedicated line (`\nBattery Level 80%`), and fixed `1800` contains `800` substring matching bug for VS1800S.
 
 ### v0.1.6-R2 "iGPSport"

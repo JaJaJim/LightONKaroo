@@ -6,6 +6,6 @@
   "latestVersion": "0.1.6-R3",
   "latestVersionCode": 24,
   "developer": "Peter Weber",
-  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode and iGPSPORT smart light support.",
-  "releaseNotes": "* Dynamic Day/Night Mode UI: Crisp black text in Day Mode (Light Theme) and glowing white text in Night Mode (Dark Theme)\n* Magicshine & iGPSPORT 6 Custom Slots: 6 Custom Slots with 0-100% sliders, pattern selection (Steady, Flash, SOS/Breath) & disk persistence\n* UI Polish: Intuitive expand/collapse arrow (▼/▲) icon, clean 2-line battery level layout, and high-contrast styling\n* iGPSPORT VS1800S dual-beam fallback & ANT+ LightCommandConnectionAIDL fix"
+  "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode, iGPSPORT and Magene BLE smart light support.",
+  "releaseNotes": "* Magene BLE Smart Light Stack: Dedicated Magene BLE controller supporting AT1200, AT1600 & L508 with 7 Custom Slots (0-100% sliders)\n* Dynamic Day/Night Mode UI: Crisp black text in Day Mode (Light Theme) and glowing white text in Night Mode (Dark Theme)\n* 7 Custom Slots for iGPSPORT, Magicshine & Magene: 0-100% sliders with pattern selection & disk persistence\n* UI Polish: Intuitive expand/collapse arrow (▼/▲) icon, clean 2-line battery level layout, and high-contrast styling"
 }

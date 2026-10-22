@@ -683,6 +683,7 @@ private fun LightCard(
         newCustomSlot4: CustomSlotConfig = assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false),
         newCustomSlot5: CustomSlotConfig = assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false),
         newCustomSlot6: CustomSlotConfig = assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false),
+        newCustomSlot7: CustomSlotConfig = assignment?.customSlot7 ?: CustomSlotConfig(7, 0, 5, 5, 5, false),
     ) {
         onUpdateAssignment(
             LightAssignment(
@@ -705,6 +706,7 @@ private fun LightCard(
                 customSlot4 = newCustomSlot4,
                 customSlot5 = newCustomSlot5,
                 customSlot6 = newCustomSlot6,
+                customSlot7 = newCustomSlot7,
             ),
         )
     }
@@ -741,6 +743,7 @@ private fun LightCard(
             val protocolText = when (light.protocol) {
                 LightProtocol.ANT_PLUS -> "ANT+"
                 LightProtocol.IGPSPORT_BLE -> "iGPSPORT BLE"
+                LightProtocol.MAGENE_BLE -> "Magene BLE"
                 LightProtocol.BLE -> "BLE"
             }
             val statusText = if (light.connected) "Connected" else "Not found"
@@ -937,14 +940,15 @@ private fun LightCard(
 
                 if (showCustomProfiles) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    for (slot in 1..6) {
+                    for (slot in 1..7) {
                         val slotConfig = when (slot) {
                             1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
                             2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
                             3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
                             4 -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
                             5 -> assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false)
-                            else -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                            6 -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                            else -> assignment?.customSlot7 ?: CustomSlotConfig(7, 0, 5, 5, 5, false)
                         }
 
                         fun saveSlot(updatedConfig: CustomSlotConfig) {
@@ -954,7 +958,8 @@ private fun LightCard(
                                 3 -> save(newCustomSlot3 = updatedConfig)
                                 4 -> save(newCustomSlot4 = updatedConfig)
                                 5 -> save(newCustomSlot5 = updatedConfig)
-                                else -> save(newCustomSlot6 = updatedConfig)
+                                6 -> save(newCustomSlot6 = updatedConfig)
+                                else -> save(newCustomSlot7 = updatedConfig)
                             }
                         }
 
@@ -1047,18 +1052,21 @@ private fun LightCard(
                                 )
                             }
                         }
-                        if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
+                        if (slot < 7) Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }
 
-            val isMagicshine = !isIgpsport && (
+            val isSingleChannelBle = !isIgpsport && (
                 light.protocol == LightProtocol.BLE ||
+                light.protocol == LightProtocol.MAGENE_BLE ||
                 light.manufacturer?.uppercase()?.contains("MAGICSHINE") == true ||
-                assignment?.protocol == LightProtocol.BLE
+                light.manufacturer?.uppercase()?.contains("MAGENE") == true ||
+                assignment?.protocol == LightProtocol.BLE ||
+                assignment?.protocol == LightProtocol.MAGENE_BLE
             )
 
-            if (isMagicshine) {
+            if (isSingleChannelBle) {
                 HorizontalDivider()
                 val showCustomProfiles = assignment?.showCustomProfiles ?: false
 
@@ -1089,14 +1097,15 @@ private fun LightCard(
 
                 if (showCustomProfiles) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    for (slot in 1..6) {
+                    for (slot in 1..7) {
                         val slotConfig = when (slot) {
                             1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
                             2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
                             3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
                             4 -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
                             5 -> assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false)
-                            else -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                            6 -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                            else -> assignment?.customSlot7 ?: CustomSlotConfig(7, 0, 5, 5, 5, false)
                         }
 
                         fun saveSlot(updatedConfig: CustomSlotConfig) {
@@ -1106,7 +1115,8 @@ private fun LightCard(
                                 3 -> save(newCustomSlot3 = updatedConfig)
                                 4 -> save(newCustomSlot4 = updatedConfig)
                                 5 -> save(newCustomSlot5 = updatedConfig)
-                                else -> save(newCustomSlot6 = updatedConfig)
+                                6 -> save(newCustomSlot6 = updatedConfig)
+                                else -> save(newCustomSlot7 = updatedConfig)
                             }
                         }
 
@@ -1147,7 +1157,7 @@ private fun LightCard(
                                 },
                             )
                         }
-                        if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
+                        if (slot < 7) Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }

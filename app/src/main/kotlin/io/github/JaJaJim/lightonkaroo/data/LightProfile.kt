@@ -4,13 +4,14 @@ import io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension
 import io.github.JaJaJim.lightonkaroo.ant.LightMode
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceConfig
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineDeviceModeProvider
+import io.github.JaJaJim.lightonkaroo.ble.MageneDeviceModeProvider
 import kotlinx.serialization.Serializable
 
 @Serializable
 enum class LightRole { FRONT, REAR }
 
 @Serializable
-enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE }
+enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE, MAGENE_BLE }
 
 @Serializable
 data class CustomSlotConfig(
@@ -45,6 +46,7 @@ data class LightAssignment(
     val customSlot4: CustomSlotConfig = CustomSlotConfig(4, 0, 20, 20, 20, false),
     val customSlot5: CustomSlotConfig = CustomSlotConfig(5, 0, 15, 15, 15, false),
     val customSlot6: CustomSlotConfig = CustomSlotConfig(6, 0, 10, 10, 10, false),
+    val customSlot7: CustomSlotConfig = CustomSlotConfig(7, 0, 5, 5, 5, false),
 ) {
     val isThreatModeEnabled: Boolean
         get() = enabled && useForThreatMode
@@ -85,6 +87,7 @@ object IgpsportDeviceModeProvider : LightModeProvider {
         LightModeOption("CUSTOM_4", "Custom 4"),
         LightModeOption("CUSTOM_5", "Custom 5"),
         LightModeOption("CUSTOM_6", "Custom 6"),
+        LightModeOption("CUSTOM_7", "Custom 7"),
     )
 }
 
@@ -115,6 +118,7 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
         if (supported != null && supported.isNotEmpty()) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
     }
     LightProtocol.IGPSPORT_BLE -> IgpsportDeviceModeProvider
+    LightProtocol.MAGENE_BLE -> MageneDeviceModeProvider
     LightProtocol.BLE -> {
         val config = deviceId?.let {
             KarooLightControllerExtension.getInstance()
