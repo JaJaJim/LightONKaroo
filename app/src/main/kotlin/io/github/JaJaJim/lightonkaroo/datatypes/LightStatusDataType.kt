@@ -71,17 +71,25 @@ class LightStatusDataType(
             }.collect { (activeState, info, actualModes) ->
                 val remoteViews = RemoteViews(context.packageName, R.layout.light_status_view)
 
+                // Detect Karoo OS Day/Night Mode (Light vs Dark Theme)
+                val uiMode = context.resources.configuration.uiMode
+                val isNightMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+                val defaultTextColor = if (isNightMode) Color.WHITE else Color.parseColor("#1C1B1F")
+                val primaryActiveColor = if (isNightMode) Color.parseColor("#ffe714") else Color.parseColor("#B38600")
+                val turquoiseColor = if (isNightMode) Color.parseColor("#32e09a") else Color.parseColor("#00897B")
+
                 val globalStatusText = when (activeState) {
                     1 -> if (engine.settings.threeModeEnabled) "PRIMARY" else "ON"
                     2 -> "SECONDARY"
                     else -> "OFF"
                 }
                 remoteViews.setTextViewText(R.id.light_mode_text, globalStatusText)
-                val globalColor = if (activeState != 0) Color.parseColor("#ffe714") else Color.WHITE
+                val globalColor = if (activeState != 0) primaryActiveColor else defaultTextColor
                 remoteViews.setTextColor(R.id.light_mode_text, globalColor)
 
-                // Top-left indicator icon: Turquoise if ALL active lights connected, White if any not found
-                val indicatorColor = if (info.allConnected) Color.parseColor("#32e09a") else Color.WHITE
+                // Top-left indicator icon: Turquoise if ALL active lights connected, Default Text Color if any not found
+                val indicatorColor = if (info.allConnected) turquoiseColor else defaultTextColor
                 remoteViews.setInt(R.id.light_indicator_tiny, "setColorFilter", indicatorColor)
 
                 // UI Customization: Logo and Glow
@@ -114,6 +122,7 @@ class LightStatusDataType(
                     remoteViews.setViewVisibility(R.id.light_battery_row, View.VISIBLE)
 
                     remoteViews.setTextViewText(R.id.light_device_name, info.deviceName)
+                    remoteViews.setTextColor(R.id.light_device_name, defaultTextColor)
 
                     if (info.isSimulatedRadar) {
                         val simText = when (info.simThreatLevel) {
@@ -123,19 +132,21 @@ class LightStatusDataType(
                         }
                         val simColor = when (info.simThreatLevel) {
                             2 -> Color.parseColor("#d34343")
-                            1 -> Color.parseColor("#ffe714")
-                            else -> Color.parseColor("#32e09a")
+                            1 -> primaryActiveColor
+                            else -> turquoiseColor
                         }
                         remoteViews.setTextViewText(R.id.light_device_status, simText)
                         remoteViews.setTextColor(R.id.light_device_status, simColor)
                     } else {
                         remoteViews.setTextViewText(R.id.light_device_status, info.statusText)
+                        remoteViews.setTextColor(R.id.light_device_status, defaultTextColor)
                     }
 
                     // Only show (Radar) suffix
                     val batterySuffix = if (info.batteryFromRadar) "(Radar)" else ""
                     remoteViews.setTextViewText(R.id.light_battery_text, batterySuffix)
-                    remoteViews.setTextColor(R.id.light_battery_text, info.batteryColor)
+                    val batteryColor = if (isNightMode) info.batteryColor else if (info.batteryColor == Color.WHITE) defaultTextColor else info.batteryColor
+                    remoteViews.setTextColor(R.id.light_battery_text, batteryColor)
 
                     // Radar Threat Icon Status (High Priority Verification)
                     val threatAssignments = engine.settings.lightAssignments.filter { it.enabled && it.useForThreatMode }
@@ -152,9 +163,9 @@ class LightStatusDataType(
                         }
 
                         val radarColor = if (isThreatActive && allThreatLightsConfirmed) {
-                            Color.parseColor("#32e09a")
+                            turquoiseColor
                         } else {
-                            Color.WHITE
+                            defaultTextColor
                         }
                         remoteViews.setInt(R.id.light_radar_icon, "setColorFilter", radarColor)
                     } else {
@@ -168,7 +179,7 @@ class LightStatusDataType(
                         else -> R.drawable.ic_battery_low
                     }
                     remoteViews.setImageViewResource(R.id.light_battery_icon, batteryIconRes)
-                    remoteViews.setInt(R.id.light_battery_icon, "setColorFilter", info.batteryColor)
+                    remoteViews.setInt(R.id.light_battery_icon, "setColorFilter", batteryColor)
 
                     // Temperature Indicator
                     if (info.temperature != null) {
@@ -178,8 +189,8 @@ class LightStatusDataType(
                         remoteViews.setTextViewText(R.id.light_temp_text, "${tempC}°C")
                         val tempColor = when {
                             tempC >= 60 -> Color.parseColor("#d34343")
-                            tempC >= 50 -> Color.parseColor("#ffe714")
-                            else -> Color.parseColor("#32e09a")
+                            tempC >= 50 -> primaryActiveColor
+                            else -> turquoiseColor
                         }
                         remoteViews.setInt(R.id.light_temp_icon, "setColorFilter", tempColor)
                         remoteViews.setTextColor(R.id.light_temp_text, tempColor)
