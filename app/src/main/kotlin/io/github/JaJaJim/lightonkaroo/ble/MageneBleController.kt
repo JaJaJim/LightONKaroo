@@ -251,18 +251,49 @@ class MageneBleController(context: Context) : LightController {
                 return false
             }
 
-            val services = peripheral.services().value
-            val primaryChar = services.flatMap { it.characteristics }.firstOrNull {
-                it.uuid.toString().uppercase().contains("FFE0") ||
-                it.uuid.toString().uppercase().contains("FFF1") ||
-                it.uuid.toString().uppercase().contains("FFE1")
+            var services = peripheral.services().value
+            for (attempt in 1..10) {
+                if (services.isNotEmpty()) break
+                delay(500L)
+                services = peripheral.services().value
             }
+
+            val allChars = services.flatMap { it.characteristics }
+            Timber.d("$TAG: Discovered GATT characteristics for $address: ${allChars.map { it.uuid }}")
+
+            val primaryChar = allChars.firstOrNull {
+                val u = it.uuid.toString().uppercase()
+                u.contains("8CE5CC05") || u.contains("8CE5CC04") || u.contains("6E400002") || u.contains("FFF2") || u.contains("FFE0")
+            } ?: allChars.firstOrNull()
+
+            val notifyChar = allChars.firstOrNull {
+                val u = it.uuid.toString().uppercase()
+                u.contains("8CE5CC06") || u.contains("6E400003") || u.contains("FFF1") || u.contains("FFE1")
+            }
+
             if (primaryChar == null) {
                 Timber.w("$TAG: No write characteristic found for Magene light $address")
                 return false
             }
             characteristics[address] = primaryChar
             Timber.d("$TAG: Connected to Magene BLE light $address ($confirmedName), write characteristic ready")
+
+            val notifyJob = scope.launch {
+                val listenChar = notifyChar ?: primaryChar
+                try {
+                    Timber.d("$TAG: Subscribing to GATT notifications on characteristic ${listenChar.uuid}...")
+                    listenChar.subscribe().collect { data ->
+                        Timber.d("$TAG: 📩 GATT Notification from Magene $address (${data.size} bytes): ${MageneProtocol.bytesToHex(data)}")
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "$TAG: Failed to subscribe to GATT notifications on Magene light $address")
+                }
+            }
+
+            scope.launch {
+                delay(300L)
+                writeBytes(address, MageneProtocol.buildOffCommand())
+            }
 
             scope.launch {
                 try {
@@ -288,6 +319,7 @@ class MageneBleController(context: Context) : LightController {
             onDeviceConnected?.invoke()
 
             peripheral.state.first { it is ConnectionState.Disconnected }
+            notifyJob.cancel()
             Timber.d("$TAG: Disconnected from Magene BLE light $address")
             true
         } catch (e: Exception) {
@@ -300,8 +332,8 @@ class MageneBleController(context: Context) : LightController {
     }
 
     override fun setMode(deviceId: String, modeName: String) {
-        val command = if (modeName == "OFF") {
-            MageneProtocol.buildOffCommand()
+        val veloLinkCommand = if (modeName == "OFF") {
+            MageneProtocol.buildVeloLinkSetLightCommand(on = false, brightPct = 0, mode = 0)
         } else if (modeName.startsWith("CUSTOM_")) {
             val slotNum = modeName.substringAfter("CUSTOM_").toIntOrNull() ?: 1
             val assignment = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
@@ -317,15 +349,24 @@ class MageneBleController(context: Context) : LightController {
             }
             val patternType = slotConfig?.patternType ?: 0
             val bright = slotConfig?.mainPct ?: 100
-            MageneProtocol.buildCustomSlotCommand(patternType, bright)
+            MageneProtocol.buildVeloLinkSetLightCommand(on = true, brightPct = bright, mode = patternType)
+        } else if (modeName.startsWith("STEADY_") || modeName.startsWith("FLASH_") || modeName.startsWith("SOS_")) {
+            val parts = modeName.split("_", limit = 2)
+            val patternType = when (parts[0]) {
+                "FLASH" -> 1
+                "SOS" -> 2
+                else -> 0
+            }
+            val bright = parts.getOrNull(1)?.toIntOrNull() ?: 100
+            MageneProtocol.buildVeloLinkSetLightCommand(on = true, brightPct = bright, mode = patternType)
         } else {
-            MageneProtocol.buildOffCommand()
+            MageneProtocol.buildVeloLinkSetLightCommand(on = false, brightPct = 0, mode = 0)
         }
 
         _actualModes.update { it + (deviceId to modeName) }
-        Timber.d("$TAG: setMode($deviceId, $modeName) -> ${MageneProtocol.bytesToHex(command)}")
+        Timber.d("$TAG: setMode($deviceId, $modeName) -> VeloLink: ${MageneProtocol.bytesToHex(veloLinkCommand)}")
         scope.launch {
-            writeBytes(deviceId, command)
+            writeBytes(deviceId, veloLinkCommand)
         }
         updateDiscoveredLights()
     }
@@ -340,7 +381,11 @@ class MageneBleController(context: Context) : LightController {
         writeMutex.withLock {
             for (attempt in 1..WRITE_RETRIES) {
                 try {
-                    characteristic.write(bytes, WriteType.WITHOUT_RESPONSE)
+                    try {
+                        characteristic.write(bytes, WriteType.WITH_RESPONSE)
+                    } catch (_: Exception) {
+                        characteristic.write(bytes, WriteType.WITHOUT_RESPONSE)
+                    }
                     return
                 } catch (e: Exception) {
                     if (attempt == WRITE_RETRIES) {
@@ -350,6 +395,42 @@ class MageneBleController(context: Context) : LightController {
                     }
                 }
             }
+        }
+    }
+
+    fun saveCustomSlotsToLightMemory(deviceId: String) {
+        val assignment = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
+            ?.engine?.settings?.lightAssignments?.find { it.deviceId == deviceId } ?: return
+
+        scope.launch {
+            Timber.d("$TAG: 💾 Starting Magene EEPROM custom slots save for $deviceId...")
+            // 1. Session Handshake
+            writeBytes(deviceId, MageneProtocol.buildOffCommand())
+            delay(150L)
+
+            // 2. Write Custom Slots 1..7 to Magene Memory
+            val slots = listOf(
+                assignment.customSlot1,
+                assignment.customSlot2,
+                assignment.customSlot3,
+                assignment.customSlot4,
+                assignment.customSlot5,
+                assignment.customSlot6,
+                assignment.customSlot7,
+            )
+            for (slot in slots) {
+                val cmd = MageneProtocol.buildCustomSlotCommand(slot.patternType, slot.mainPct)
+                val veloCmd = MageneProtocol.buildVeloLinkSetLightCommand(on = true, brightPct = slot.mainPct, mode = slot.patternType)
+                writeBytes(deviceId, veloCmd)
+                delay(100L)
+                writeBytes(deviceId, cmd)
+                delay(100L)
+            }
+
+            // 3. Complete Save
+            delay(150L)
+            writeBytes(deviceId, MageneProtocol.buildOffCommand())
+            Timber.d("$TAG: 💾 Magene EEPROM custom slots saved successfully for $deviceId!")
         }
     }
 

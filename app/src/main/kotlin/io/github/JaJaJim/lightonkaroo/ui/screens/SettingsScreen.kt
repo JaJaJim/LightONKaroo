@@ -755,14 +755,16 @@ private fun LightCard(
             )
         }
 
-        // Line 3: Prominent "Slide to activate" + Switch
+        // Line 3: Prominent "Slide to activate / configure" + Switch
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val isMageneLight = light.protocol == LightProtocol.MAGENE_BLE || light.manufacturer?.uppercase()?.contains("MAGENE") == true
+            val switchLabel = if (isMageneLight) "Slide to configure" else "Slide to activate"
             Text(
-                "Slide to activate",
+                switchLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1158,6 +1160,21 @@ private fun LightCard(
                             )
                         }
                         if (slot < 7) Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    val isMageneDevice = light.protocol == LightProtocol.MAGENE_BLE || light.manufacturer?.uppercase()?.contains("MAGENE") == true
+                    if (isMageneDevice) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val mageneController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.mageneController
+                                mageneController?.saveCustomSlotsToLightMemory(light.id)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("💾 Save Profiles to Magene Light Memory", color = MaterialTheme.colorScheme.onPrimary)
+                        }
                     }
                 }
             }
