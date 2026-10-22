@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.6-R2 "iGPSport"
+# LightONKaroo v0.1.6-R3 "iGPSport"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3** (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
@@ -57,6 +57,11 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S / 1300Pro and iGPSPORT VS1800S. Implemented speculative support for VS1200S, VS800S, and VS500 series smart lights based on igpsport-karoo.
 
 ## 📝 Changelog
+### v0.1.6-R3 "iGPSport"
+- **DYNAMIC KAROO OS DAY/NIGHT MODE CONTRAST**: Automatic text and accent color switching for high-contrast crisp black text (`#1C1B1F`) in Day Mode (Light Theme) and glowing white text (`#FFFFFF`) in Night Mode (Dark Theme).
+- **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**: 6 Custom Slots for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`) with stufenlose 0–100% sliders and pattern type selection (Steady, Flash, SOS/Breath), saved permanently in `light_assignments.json`.
+- **UI POLISH & EXPAND ARROW ICON**: Replaced Custom Profiles switch with an intuitive `▼` / `▲` expand/collapse arrow icon, formatted battery level cleanly onto a dedicated line (`\nBattery Level 80%`), and fixed `1800` contains `800` substring matching bug for VS1800S.
+
 ### v0.1.6-R2 "iGPSport"
 - **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**:
   - Expanded Custom Light Profiles to **6 Custom Slots** for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`).

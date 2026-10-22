@@ -2,10 +2,10 @@
   "label": "LightONKaroo",
   "packageName": "io.github.JaJaJim.lightonkaroo",
   "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
-  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6-R2/LightONKaroo-v0.1.6-R2.apk",
-  "latestVersion": "0.1.6-R2",
-  "latestVersionCode": 23,
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6-R3/LightONKaroo-v0.1.6-R3.apk",
+  "latestVersion": "0.1.6-R3",
+  "latestVersionCode": 24,
   "developer": "Peter Weber",
   "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode and iGPSPORT smart light support.",
-  "releaseNotes": "* Magicshine & iGPSPORT 6 Custom Slots: 6 Custom Slots with 0-100% sliders, pattern selection (Steady, Flash, SOS/Breath) & disk persistence\n* v0.1.6-R2: Fixed iGPSPORT VS1800S dual-beam controls fallback after device reboot / fresh install\n* iGPSPORT BLE Smart Light Integration: Full support for VS1800S (Dual Beam) & VS1200S/VS800S/VS500 (Single Beam)\n* ANT+ Light Command AIDL Fix: Dynamic descriptor discovery (LightCommandConnectionAIDL at TX 18) restoring full ANT+ control\n* Ravemen FR300 pre-OFF mode filtering: Prevents status sticking when light is turned OFF"
+  "releaseNotes": "* Dynamic Day/Night Mode UI: Crisp black text in Day Mode (Light Theme) and glowing white text in Night Mode (Dark Theme)\n* Magicshine & iGPSPORT 6 Custom Slots: 6 Custom Slots with 0-100% sliders, pattern selection (Steady, Flash, SOS/Breath) & disk persistence\n* UI Polish: Intuitive expand/collapse arrow (▼/▲) icon, clean 2-line battery level layout, and high-contrast styling\n* iGPSPORT VS1800S dual-beam fallback & ANT+ LightCommandConnectionAIDL fix"
 }
