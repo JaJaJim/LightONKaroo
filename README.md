@@ -136,6 +136,26 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - Integrated custom logo.
 - Simplified manual control logic.
 
+## 🛠 For Developers & AI Agents
+
+If you want to fork, build, or contribute to **LightONKaroo** (or use AI developer assistants like Claude, Gemini, Cursor, or Copilot), the project is configured to build immediately out of the box.
+
+### Quick Start
+1. **Clone & Open**: Open the cloned directory in **Android Studio** (Ladybug 2024.2.1+ recommended).
+2. **Prerequisites**: JDK 17+ and Android SDK 35 (automatically configured via Gradle).
+3. **Gradle Sync**: Perform a Gradle Sync. All dependencies (Hammerhead `karoo-ext` SDK 1.1.9, Jetpack Compose, Kable BLE, Kotlin Serialization) will download automatically from Maven Central.
+4. **Build & Install**:
+   - Debug Build: `./gradlew assembleDebug` or run directly onto your connected Karoo 3.
+   - Slim Release Build: `./gradlew assembleRelease` (Generates minified APK ~1.8 MB without requiring keystore environment variables).
+
+### Architecture Overview
+- **`KarooLightControllerExtension.kt`**: Main Karoo Extension entry point (`KarooExtension`). Orchestrates ride states, radar monitoring, and unified BLE discovery.
+- **`karoo/KarooLightControl.kt`**: Manages Karoo OS `SensorService` IPC binder connection, AIDL transaction descriptor matching (`LightCommandConnectionAIDL` on TX code 18), and sequential command queuing.
+- **`ble/IgpsportBleController.kt`**: Independent Bluetooth controller for iGPSPORT VS-series lights over Nordic UART service (`6E40...`), featuring 10s auto-timeout scanning, adaptive reconnect backoff, and 6 custom slot profiles.
+- **`ble/MagicshineBleController.kt`**: Independent Bluetooth controller for Magicshine BLE lights (`0000FFE1...`), with 6 custom slot profiles (0-100% sliders + Steady/Flash/SOS pattern selection).
+- **`datatypes/LightStatusDataType.kt`**: Renders the dynamic Karoo Ride Page Data Field (`RemoteViews`) with automatic Day/Night Mode theme contrast.
+- **`ui/screens/SettingsScreen.kt`**: Jetpack Compose Settings UI with expanding in-card light configuration, collapsible custom light profiles, and high-contrast styling.
+
 ## 📜 License & Credits
 - Licensed under the **MIT License**.
 - **Tiago Fontes Dias** ([tiagodias00](https://github.com/tiagodias00)): Author of [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) (MIT License).
