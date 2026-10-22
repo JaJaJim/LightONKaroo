@@ -89,6 +89,25 @@ object MageneProtocol {
         return MagicshineProtocol.buildBrightCommand(presetIndex = 1, channel = 0, model = model, bright = bright)
     }
 
+    fun buildFlashCustomSlotCommand(
+        slotIndex: Int,
+        patternType: Int, // 0: Steady, 1: Flash, 2: SOS
+        brightnessPct: Int, // 0..100
+    ): ByteArray {
+        val model = when (patternType) {
+            1 -> MagicshineProtocol.MODE_FAST_FLASH
+            2 -> MagicshineProtocol.MODE_SOS
+            else -> MagicshineProtocol.MODE_STEADY
+        }
+        val bright = brightnessPct.coerceIn(0, 100)
+        return MagicshineProtocol.buildFlashWriteCommand(slotIndex = slotIndex, model = model, bright = bright, channel = 0)
+    }
+
+    fun buildPrivilegedModeCommand(enable: Boolean): ByteArray {
+        val flag = if (enable) 0x01.toByte() else 0x00.toByte()
+        return byteArrayOf(0xDE.toByte(), 0x08, 0xB0.toByte(), 0x01, flag, 0x00, 0xBB.toByte(), (0x08 xor 0xB0 xor 0x01 xor flag.toInt()).toByte(), 0xED.toByte())
+    }
+
     fun buildVeloLinkSetLightCommand(on: Boolean, brightPct: Int, mode: Int): ByteArray {
         val tlv1 = VeloLinkCodec.buildTlv(0x02, 0x00, 0x01, 0x01, byteArrayOf(if (on) 1 else 0))
         val tlv2 = VeloLinkCodec.buildTlv(0x02, 0x00, 0x01, 0x03, byteArrayOf(brightPct.coerceIn(0, 100).toByte()))

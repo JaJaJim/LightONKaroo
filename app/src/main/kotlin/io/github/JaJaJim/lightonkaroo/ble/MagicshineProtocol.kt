@@ -33,6 +33,22 @@ object MagicshineProtocol {
         return buildFrame(0xA2.toByte(), 0x01, content)
     }
 
+    fun buildFlashWriteCommand(
+        slotIndex: Int,
+        model: Int,
+        bright: Int,
+        channel: Int = 0,
+    ): ByteArray {
+        val content = ByteArray(14)
+        content[0] = slotIndex.coerceIn(1, 7).toByte()
+        val offset = channel * 3 + 1
+        content[offset] = 0x01
+        content[offset + 1] = model.toByte()
+        content[offset + 2] = bright.coerceIn(0, 100).toByte()
+        content[13] = FLAG_SAVE
+        return buildFrame(0xA1.toByte(), 0x01, content)
+    }
+
     fun buildOffCommand(channel: Int = 0): ByteArray {
         val content = ByteArray(14)
         content[0] = 0x01

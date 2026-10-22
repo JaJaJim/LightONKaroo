@@ -398,17 +398,22 @@ class MageneBleController(context: Context) : LightController {
         }
     }
 
+    private val _saveProgressStatus = MutableStateFlow<Map<String, String>>(emptyMap())
+    val saveProgressStatus: StateFlow<Map<String, String>> = _saveProgressStatus
+
     fun saveCustomSlotsToLightMemory(deviceId: String) {
         val assignment = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()
             ?.engine?.settings?.lightAssignments?.find { it.deviceId == deviceId } ?: return
 
         scope.launch {
             Timber.d("$TAG: 💾 Starting Magene EEPROM custom slots save for $deviceId...")
-            // 1. Session Handshake
-            writeBytes(deviceId, MageneProtocol.buildOffCommand())
-            delay(150L)
 
-            // 2. Write Custom Slots 1..7 to Magene Memory
+            // 1. Unlock Privileged Mode
+            _saveProgressStatus.update { it + (deviceId to "🔓 Unlocking Magene Memory...") }
+            writeBytes(deviceId, MageneProtocol.buildPrivilegedModeCommand(true))
+            delay(250L)
+
+            // 2. Write Custom Slots 1..7 sequentially
             val slots = listOf(
                 assignment.customSlot1,
                 assignment.customSlot2,
@@ -418,18 +423,26 @@ class MageneBleController(context: Context) : LightController {
                 assignment.customSlot6,
                 assignment.customSlot7,
             )
-            for (slot in slots) {
-                val cmd = MageneProtocol.buildCustomSlotCommand(slot.patternType, slot.mainPct)
-                val veloCmd = MageneProtocol.buildVeloLinkSetLightCommand(on = true, brightPct = slot.mainPct, mode = slot.patternType)
-                writeBytes(deviceId, veloCmd)
-                delay(100L)
-                writeBytes(deviceId, cmd)
-                delay(100L)
+
+            for ((index, slot) in slots.withIndex()) {
+                val slotNum = index + 1
+                val patternName = when (slot.patternType) {
+                    1 -> "Flash"
+                    2 -> "SOS"
+                    else -> "Steady"
+                }
+                _saveProgressStatus.update { it + (deviceId to "💾 Writing Custom Slot $slotNum of 7 (${slot.mainPct}% $patternName)...") }
+                val flashCmd = MageneProtocol.buildFlashCustomSlotCommand(slotNum, slot.patternType, slot.mainPct)
+                writeBytes(deviceId, flashCmd)
+                delay(250L)
             }
 
-            // 3. Complete Save
-            delay(150L)
-            writeBytes(deviceId, MageneProtocol.buildOffCommand())
+            // 3. Lock Privileged Mode
+            _saveProgressStatus.update { it + (deviceId to "🔒 Locking Memory...") }
+            writeBytes(deviceId, MageneProtocol.buildPrivilegedModeCommand(false))
+            delay(250L)
+
+            _saveProgressStatus.update { it + (deviceId to "✅ All 7 Custom Profiles saved to Magene Light Memory!") }
             Timber.d("$TAG: 💾 Magene EEPROM custom slots saved successfully for $deviceId!")
         }
     }

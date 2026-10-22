@@ -30,6 +30,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -799,32 +800,34 @@ private fun LightCard(
 
             val refresh: () -> Unit = { io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.lightControl?.forceRefreshLightParameters(light.id) }
 
-            ModeRow(
-                label = "Primary ON Mode",
-                selectedMode = activeMode,
-                modes = modes,
-                onSelected = { save(newActiveMode = it) },
-                onTest = { onTestMode(light.id, activeMode) },
-                onRequestRefresh = refresh,
-            )
+            if (light.protocol != LightProtocol.MAGENE_BLE) {
+                ModeRow(
+                    label = "Primary ON Mode",
+                    selectedMode = activeMode,
+                    modes = modes,
+                    onSelected = { save(newActiveMode = it) },
+                    onTest = { onTestMode(light.id, activeMode) },
+                    onRequestRefresh = refresh,
+                )
 
-            ModeRow(
-                label = "Secondary ON Mode",
-                selectedMode = secondaryMode,
-                modes = modes,
-                onSelected = { save(newSecondaryMode = it) },
-                onTest = { onTestMode(light.id, secondaryMode) },
-                onRequestRefresh = refresh,
-            )
+                ModeRow(
+                    label = "Secondary ON Mode",
+                    selectedMode = secondaryMode,
+                    modes = modes,
+                    onSelected = { save(newSecondaryMode = it) },
+                    onTest = { onTestMode(light.id, secondaryMode) },
+                    onRequestRefresh = refresh,
+                )
 
-            ModeRow(
-                label = "OFF Mode",
-                selectedMode = modeOff,
-                modes = modes,
-                onSelected = { save(newModeOff = it) },
-                onTest = { onTestMode(light.id, modeOff) },
-                onRequestRefresh = refresh,
-            )
+                ModeRow(
+                    label = "OFF Mode",
+                    selectedMode = modeOff,
+                    modes = modes,
+                    onSelected = { save(newModeOff = it) },
+                    onTest = { onTestMode(light.id, modeOff) },
+                    onRequestRefresh = refresh,
+                )
+            }
 
             if (light.protocol == LightProtocol.ANT_PLUS) {
                 Row(
@@ -1165,15 +1168,29 @@ private fun LightCard(
                     val isMageneDevice = light.protocol == LightProtocol.MAGENE_BLE || light.manufacturer?.uppercase()?.contains("MAGENE") == true
                     if (isMageneDevice) {
                         Spacer(modifier = Modifier.height(8.dp))
+                        val mageneController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.mageneController
+                        val saveStatusMap by mageneController?.saveProgressStatus?.collectAsState() ?: remember { mutableStateOf(emptyMap()) }
+                        val saveStatus = saveStatusMap[light.id] ?: ""
+
                         Button(
                             onClick = {
-                                val mageneController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.mageneController
                                 mageneController?.saveCustomSlotsToLightMemory(light.id)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("💾 Save Profiles to Magene Light Memory", color = MaterialTheme.colorScheme.onPrimary)
+                        }
+
+                        if (saveStatus.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = saveStatus,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (saveStatus.startsWith("✅")) Color(0xFF32E09A) else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
                 }
