@@ -318,7 +318,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                     if (!isBrakingActive) {
                         isBrakingActive = true
                         Timber.d("$TAG: 🚨 G-Brake Light triggered! DeltaG=%.2f", deltaG)
-                        applyUnifiedModes()
+                        applyBrakeLightModes()
                     }
                     val maxHoldSec = brakeAssignments.maxOfOrNull { it.brakeHoldTimeSeconds } ?: 2
                     val holdMs = maxHoldSec * 1000L
@@ -329,7 +329,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                         }
                         isBrakingActive = false
                         Timber.d("$TAG: G-Brake Light cleared after ${maxHoldSec}s hold time")
-                        applyUnifiedModes()
+                        clearBrakeLightModes()
                     }
                 }
             }
@@ -338,6 +338,30 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         }
 
         sensorManager?.registerListener(accelListener, accel, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+    }
+
+    private fun applyBrakeLightModes() {
+        for (assignment in engine.settings.lightAssignments) {
+            if (!assignment.enabled || !assignment.brakeLightEnabled) continue
+            if (isRadarThreatActive && assignment.useForThreatMode) continue
+            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, assignment.brakeLightMode)
+        }
+    }
+
+    private fun clearBrakeLightModes() {
+        val state = engine.activeState.value
+        for (assignment in engine.settings.lightAssignments) {
+            if (!assignment.enabled || !assignment.brakeLightEnabled) continue
+            if (isRadarThreatActive && assignment.useForThreatMode) continue
+
+            val targetMode = when {
+                state == 0 -> assignment.modeOff
+                assignment.speedAdaptiveEnabled && currentSpeedKmh >= assignment.speedThresholdKmh -> assignment.secondaryMode
+                assignment.speedAdaptiveEnabled -> assignment.activeMode
+                else -> assignment.modeForState(state)
+            }
+            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
+        }
     }
 
     fun applyUnifiedModes() {
