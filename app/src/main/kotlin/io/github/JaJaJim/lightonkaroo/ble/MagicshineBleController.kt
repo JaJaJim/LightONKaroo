@@ -371,6 +371,23 @@ class MagicshineBleController(context: Context) : LightController {
         }
     }
 
+    fun setCustomSlotLivePreview(deviceId: String, slotNumber: Int, patternType: Int, brightnessPct: Int) {
+        val config = deviceConfigs.getOrPut(deviceId) { MagicshineDeviceConfig.forDevice("Magicshine") }
+        val prefix = when (patternType) {
+            1 -> "FLASH"
+            2 -> "SOS"
+            else -> "STEADY"
+        }
+        val bright = brightnessPct.coerceIn(0, 100)
+        val command = config.buildCommand("${prefix}_${bright}") ?: MagicshineProtocol.buildBrightCommand(1, 0, if (patternType == 1) 3 else if (patternType == 2) 4 else 1, bright)
+
+        _actualModes.update { it + (deviceId to "CUSTOM_$slotNumber") }
+        scope.launch {
+            writeBytes(deviceId, command)
+        }
+        updateDiscoveredLights()
+    }
+
     override fun setMode(deviceId: String, modeName: String) {
         val config = deviceConfigs.getOrPut(deviceId) { MagicshineDeviceConfig.forDevice("Magicshine") }
         val command = if (modeName == "OFF") {

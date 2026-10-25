@@ -1266,6 +1266,8 @@ private fun LightCard(
                                 onSelected = { selected ->
                                     val newPattern = selected.toIntOrNull() ?: 0
                                     saveSlot(slotConfig.copy(patternType = newPattern))
+                                    val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
+                                    msController?.setCustomSlotLivePreview(light.id, slot, newPattern, mainPct)
                                 },
                             )
 
@@ -1277,6 +1279,8 @@ private fun LightCard(
                                 unit = "%",
                                 onSaveValue = { pct ->
                                     saveSlot(slotConfig.copy(mainPct = pct))
+                                    val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
+                                    msController?.setCustomSlotLivePreview(light.id, slot, patternType, pct)
                                 },
                             )
                         }
