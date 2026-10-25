@@ -291,33 +291,26 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         val accel = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: return
 
         accelListener = object : android.hardware.SensorEventListener {
-            private var lastX = 0f
             private var lastY = 0f
-            private var lastZ = 0f
 
             override fun onSensorChanged(event: android.hardware.SensorEvent?) {
                 if (event == null || event.sensor.type != android.hardware.Sensor.TYPE_ACCELEROMETER) return
-                val x = event.values[0]
                 val y = event.values[1]
-                val z = event.values[2]
 
-                val deltaX = x - lastX
                 val deltaY = y - lastY
-                val deltaZ = z - lastZ
-                lastX = x
                 lastY = y
-                lastZ = z
 
-                val deltaG = kotlin.math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ) / 9.81f
+                // Y-axis negative acceleration represents longitudinal forward deceleration (braking)
+                val brakingDecelerationG = -deltaY / 9.81f
 
                 val brakeAssignments = engine.settings.lightAssignments.filter { it.enabled && it.brakeLightEnabled }
                 if (brakeAssignments.isEmpty()) return
 
                 val minThreshold = brakeAssignments.minOfOrNull { it.brakeGThreshold } ?: 0.20f
-                if (deltaG >= minThreshold) {
+                if (brakingDecelerationG >= minThreshold) {
                     if (!isBrakingActive) {
                         isBrakingActive = true
-                        Timber.d("$TAG: 🚨 G-Brake Light triggered! DeltaG=%.2f", deltaG)
+                        Timber.d("$TAG: 🚨 G-Brake Light triggered! Forward Deceleration=%.2fg", brakingDecelerationG)
                         applyBrakeLightModes()
                     }
                     val maxHoldSec = brakeAssignments.maxOfOrNull { it.brakeHoldTimeSeconds } ?: 2
