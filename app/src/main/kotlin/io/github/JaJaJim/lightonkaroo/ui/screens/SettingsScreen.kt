@@ -898,6 +898,12 @@ private fun LightCard(
                 }
 
                 if (brakeLightEnabled) {
+                    Text(
+                        "Priority: 1. Hard OFF > 2. Radar Threat > 3. G-Brake Light",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     var currentG by remember(brakeGThreshold) { mutableStateOf((brakeGThreshold * 100).toInt()) }
                     StepperSlider(
                         label = "Brake Sensitivity",
@@ -950,6 +956,12 @@ private fun LightCard(
                 }
 
                 if (speedAdaptiveEnabled) {
+                    Text(
+                        "Priority: 1. Hard OFF > 2. Radar Threat > 3. G-Brake Light > 4. Speed-Adaptive",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     StepperSlider(
                         label = "Target Speed",
                         value = speedThresholdKmh,
