@@ -667,6 +667,12 @@ private fun LightCard(
         modeProviderFor(light.protocol, light.id).availableModes()
     }
 
+    val brakeLightEnabled = assignment?.brakeLightEnabled ?: false
+    val brakeGThreshold = assignment?.brakeGThreshold ?: 0.20f
+    val brakeLightMode = assignment?.brakeLightMode ?: "FAST_FLASH"
+    val speedAdaptiveEnabled = assignment?.speedAdaptiveEnabled ?: false
+    val speedThresholdKmh = assignment?.speedThresholdKmh ?: 30
+
     fun save(
         newEnabled: Boolean = enabled,
         newNickname: String = nickname,
@@ -683,6 +689,11 @@ private fun LightCard(
         newCustomSlot4: CustomSlotConfig = assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false),
         newCustomSlot5: CustomSlotConfig = assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false),
         newCustomSlot6: CustomSlotConfig = assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false),
+        newBrakeLightEnabled: Boolean = brakeLightEnabled,
+        newBrakeGThreshold: Float = brakeGThreshold,
+        newBrakeLightMode: String = brakeLightMode,
+        newSpeedAdaptiveEnabled: Boolean = speedAdaptiveEnabled,
+        newSpeedThresholdKmh: Int = speedThresholdKmh,
     ) {
         onUpdateAssignment(
             LightAssignment(
@@ -705,6 +716,11 @@ private fun LightCard(
                 customSlot4 = newCustomSlot4,
                 customSlot5 = newCustomSlot5,
                 customSlot6 = newCustomSlot6,
+                brakeLightEnabled = newBrakeLightEnabled,
+                brakeGThreshold = newBrakeGThreshold,
+                brakeLightMode = newBrakeLightMode,
+                speedAdaptiveEnabled = newSpeedAdaptiveEnabled,
+                speedThresholdKmh = newSpeedThresholdKmh,
             ),
         )
     }
@@ -858,6 +874,91 @@ private fun LightCard(
                         onSelected = { save(newSoftwareThreatMode = it) },
                         onTest = { onTestMode(light.id, softwareThreatMode) },
                         onRequestRefresh = refresh,
+                    )
+                }
+
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("G-Brake Light", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Triggers a brake light mode upon decelerating",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = brakeLightEnabled,
+                        onCheckedChange = { save(newBrakeLightEnabled = it) },
+                    )
+                }
+
+                if (brakeLightEnabled) {
+                    var currentG by remember(brakeGThreshold) { mutableStateOf((brakeGThreshold * 100).toInt()) }
+                    StepperSlider(
+                        label = "Brake Sensitivity",
+                        value = currentG,
+                        range = 10..60,
+                        step = 5,
+                        unit = "g",
+                        onSaveValue = { gInt ->
+                            currentG = gInt
+                            save(newBrakeGThreshold = gInt / 100f)
+                        },
+                    )
+
+                    val brakeOptions = buildList {
+                        add(LightModeOption("FAST_FLASH", "Fast Flash"))
+                        modes.forEach { mode ->
+                            if (mode.id != "OFF" && mode.id != "FAST_FLASH") {
+                                add(mode)
+                            }
+                        }
+                    }
+                    InlineDropdown(
+                        label = "Brake Light Mode",
+                        selectedId = brakeLightMode,
+                        options = brakeOptions.map { it.id to it.displayName },
+                        onSelected = { selected ->
+                            save(newBrakeLightMode = selected)
+                        },
+                    )
+                }
+
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Speed-Adaptive Lighting", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Switches from Primary to Secondary mode above a target speed",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = speedAdaptiveEnabled,
+                        onCheckedChange = { save(newSpeedAdaptiveEnabled = it) },
+                    )
+                }
+
+                if (speedAdaptiveEnabled) {
+                    StepperSlider(
+                        label = "Target Speed",
+                        value = speedThresholdKmh,
+                        range = 10..40,
+                        step = 1,
+                        unit = " km/h",
+                        onSaveValue = { kmh ->
+                            save(newSpeedThresholdKmh = kmh)
+                        },
                     )
                 }
             }

@@ -45,6 +45,11 @@ data class LightAssignment(
     val customSlot4: CustomSlotConfig = CustomSlotConfig(4, 0, 20, 20, 20, false),
     val customSlot5: CustomSlotConfig = CustomSlotConfig(5, 0, 15, 15, 15, false),
     val customSlot6: CustomSlotConfig = CustomSlotConfig(6, 0, 10, 10, 10, false),
+    val brakeLightEnabled: Boolean = false,
+    val brakeGThreshold: Float = 0.20f,
+    val brakeLightMode: String = "FAST_FLASH",
+    val speedAdaptiveEnabled: Boolean = false,
+    val speedThresholdKmh: Int = 30,
 ) {
     val isThreatModeEnabled: Boolean
         get() = enabled && useForThreatMode

@@ -130,18 +130,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         engine = LightControlEngine()
 
         engine.onApplyState = { state ->
-            for (assignment in engine.settings.lightAssignments) {
-                if (!assignment.enabled) continue
-
-                // If threat is active, defer mode changes for threat-participating lights until threat clears
-                if (isRadarThreatActive && assignment.useForThreatMode && assignment.protocol == LightProtocol.ANT_PLUS) {
-                    Timber.d("$TAG: Threat active! Deferring physical light change for ${assignment.displayName}")
-                    continue
-                }
-
-                val modeName = assignment.modeForState(state)
-                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
-            }
+            applyUnifiedModes()
             updateRadarMonitoring()
         }
 
@@ -151,6 +140,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
             }
         }
+
+        setupGForceBrakeSensor()
 
         // Merge ANT+, Magicshine BLE, and iGPSPORT BLE discovered lights
         extensionScope.launch {
@@ -284,6 +275,82 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 }
                 delay(speedSec * 1000L)
             }
+        }
+    }
+
+    @Volatile private var isBrakingActive: Boolean = false
+    @Volatile private var currentSpeedKmh: Float = 0f
+    private var sensorManager: android.hardware.SensorManager? = null
+    private var accelListener: android.hardware.SensorEventListener? = null
+    private var brakeHoldJob: Job? = null
+
+    private fun setupGForceBrakeSensor() {
+        if (sensorManager == null) {
+            sensorManager = applicationContext.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+        }
+        val accel = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: return
+
+        accelListener = object : android.hardware.SensorEventListener {
+            private var lastX = 0f
+            private var lastY = 0f
+            private var lastZ = 0f
+
+            override fun onSensorChanged(event: android.hardware.SensorEvent?) {
+                if (event == null || event.sensor.type != android.hardware.Sensor.TYPE_ACCELEROMETER) return
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+
+                val deltaX = x - lastX
+                val deltaY = y - lastY
+                val deltaZ = z - lastZ
+                lastX = x
+                lastY = y
+                lastZ = z
+
+                val deltaG = kotlin.math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ) / 9.81f
+
+                val brakeAssignments = engine.settings.lightAssignments.filter { it.enabled && it.brakeLightEnabled }
+                if (brakeAssignments.isEmpty()) return
+
+                val minThreshold = brakeAssignments.minOfOrNull { it.brakeGThreshold } ?: 0.20f
+                if (deltaG >= minThreshold) {
+                    if (!isBrakingActive) {
+                        isBrakingActive = true
+                        Timber.d("$TAG: 🚨 G-Brake Light triggered! DeltaG=%.2f", deltaG)
+                        applyUnifiedModes()
+                    }
+                    brakeHoldJob?.cancel()
+                    brakeHoldJob = extensionScope.launch {
+                        delay(2000L)
+                        isBrakingActive = false
+                        Timber.d("$TAG: G-Brake Light cleared")
+                        applyUnifiedModes()
+                    }
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+        }
+
+        sensorManager?.registerListener(accelListener, accel, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+    }
+
+    fun applyUnifiedModes() {
+        val state = engine.activeState.value
+        for (assignment in engine.settings.lightAssignments) {
+            if (!assignment.enabled) continue
+
+            val targetMode = when {
+                state == 0 -> assignment.modeOff
+                isRadarThreatActive && assignment.useForThreatMode -> assignment.softwareThreatMode
+                isBrakingActive && assignment.brakeLightEnabled -> assignment.brakeLightMode
+                assignment.speedAdaptiveEnabled && currentSpeedKmh >= assignment.speedThresholdKmh -> assignment.secondaryMode
+                assignment.speedAdaptiveEnabled -> assignment.activeMode
+                else -> assignment.modeForState(state)
+            }
+
+            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, targetMode)
         }
     }
 
