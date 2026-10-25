@@ -1070,24 +1070,18 @@ private fun LightCard(
 
                 if (showCustomProfiles) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    for (slot in 1..6) {
+                    for (slot in 1..3) {
                         val slotConfig = when (slot) {
                             1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
                             2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
-                            3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
-                            4 -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
-                            5 -> assignment?.customSlot5 ?: CustomSlotConfig(5, 0, 15, 15, 15, false)
-                            else -> assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false)
+                            else -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
                         }
 
                         fun saveSlot(updatedConfig: CustomSlotConfig) {
                             when (slot) {
                                 1 -> save(newCustomSlot1 = updatedConfig)
                                 2 -> save(newCustomSlot2 = updatedConfig)
-                                3 -> save(newCustomSlot3 = updatedConfig)
-                                4 -> save(newCustomSlot4 = updatedConfig)
-                                5 -> save(newCustomSlot5 = updatedConfig)
-                                else -> save(newCustomSlot6 = updatedConfig)
+                                else -> save(newCustomSlot3 = updatedConfig)
                             }
                         }
 
@@ -1180,7 +1174,7 @@ private fun LightCard(
                                 )
                             }
                         }
-                        if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
+                        if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }

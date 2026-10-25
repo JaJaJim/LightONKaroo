@@ -56,12 +56,17 @@ object IgpsportProtocol {
         mainPct: Int, // 0 to 100
     ): ByteArray {
         val slot = 63 + slotNumber.coerceIn(1, 3)
+        val pct = mainPct.coerceIn(0, 100)
         val changePattern = CustomChange.Pattern(patternType)
-        val changeMain = CustomChange.Brightness(patternType, CustomMode.MAIN, mainPct.coerceIn(0, 100))
+        val changeHigh = CustomChange.Brightness(patternType, CustomMode.HIGH_BEAM, pct)
+        val changeLow = CustomChange.Brightness(patternType, CustomMode.LOW_BEAM, pct)
+        val changeMain = CustomChange.Brightness(patternType, CustomMode.MAIN, pct)
 
         val f1 = IgpsProtocol.modifyCustomMode(slot, changePattern)
-        val f2 = IgpsProtocol.modifyCustomMode(slot, changeMain)
-        return f1 + f2
+        val f2 = IgpsProtocol.modifyCustomMode(slot, changeHigh)
+        val f3 = IgpsProtocol.modifyCustomMode(slot, changeLow)
+        val f4 = IgpsProtocol.modifyCustomMode(slot, changeMain)
+        return f1 + f2 + f3 + f4
     }
 
     fun buildQueryBattery(): ByteArray = IgpsProtocol.readBattery()
