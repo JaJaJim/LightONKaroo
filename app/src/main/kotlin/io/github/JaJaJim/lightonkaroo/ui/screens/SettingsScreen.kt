@@ -883,13 +883,14 @@ private fun LightCard(
                         onRequestRefresh = refresh,
                     )
                 }
+            }
 
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            HorizontalDivider()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("G-Brake Light", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
@@ -993,7 +994,6 @@ private fun LightCard(
                         },
                     )
                 }
-            }
 
             val isIgpsport = light.protocol == LightProtocol.IGPSPORT_BLE ||
                              light.manufacturer?.uppercase() == "IGPSPORT" ||
