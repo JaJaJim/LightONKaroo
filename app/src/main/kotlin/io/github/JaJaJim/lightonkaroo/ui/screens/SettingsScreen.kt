@@ -560,6 +560,7 @@ private fun DataFieldAppearanceSection(
                         scope.launch {
                             repository?.resetToFactoryDefaults()
                             onSave(LightControllerSettings())
+                            io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.onResetAndTriggerDiscovery()
                         }
                     },
                 ) {

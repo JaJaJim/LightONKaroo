@@ -496,6 +496,16 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         }
     }
 
+    fun onResetAndTriggerDiscovery() {
+        extensionScope.launch {
+            igpsportController.resetBackoff()
+            magicshineController.resetBackoff()
+            onAssignmentChanged()
+            discoverKarooLights()
+            startUnifiedBleScan()
+        }
+    }
+
     fun setSettingsUiActive(active: Boolean) {
         Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
