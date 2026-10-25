@@ -946,13 +946,13 @@ private fun LightCard(
                             }
                         }
                     }
-                    InlineDropdown(
+                    ModeRow(
                         label = "Brake Light Mode",
-                        selectedId = brakeLightMode,
-                        options = brakeOptions.map { it.id to it.displayName },
-                        onSelected = { selected ->
-                            save(newBrakeLightMode = selected)
-                        },
+                        selectedMode = brakeLightMode,
+                        modes = brakeOptions,
+                        onSelected = { save(newBrakeLightMode = it) },
+                        onTest = { onTestMode(light.id, brakeLightMode) },
+                        onRequestRefresh = refresh,
                     )
                 }
 

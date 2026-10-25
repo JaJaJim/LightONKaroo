@@ -292,6 +292,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         accelListener = object : android.hardware.SensorEventListener {
             private var lastY = 0f
+            private var continuousBrakeStartTime = 0L
 
             override fun onSensorChanged(event: android.hardware.SensorEvent?) {
                 if (event == null || event.sensor.type != android.hardware.Sensor.TYPE_ACCELEROMETER) return
@@ -304,25 +305,39 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 val brakingDecelerationG = -deltaY / 9.81f
 
                 val brakeAssignments = engine.settings.lightAssignments.filter { it.enabled && it.brakeLightEnabled }
-                if (brakeAssignments.isEmpty()) return
+                if (brakeAssignments.isEmpty()) {
+                    continuousBrakeStartTime = 0L
+                    return
+                }
 
                 val minThreshold = brakeAssignments.minOfOrNull { it.brakeGThreshold } ?: 0.20f
+                val now = System.currentTimeMillis()
+
                 if (brakingDecelerationG >= minThreshold) {
-                    if (!isBrakingActive) {
-                        isBrakingActive = true
-                        Timber.d("$TAG: 🚨 G-Brake Light triggered! Forward Deceleration=%.2fg", brakingDecelerationG)
-                        applyBrakeLightModes()
-                    }
-                    val maxHoldSec = brakeAssignments.maxOfOrNull { it.brakeHoldTimeSeconds } ?: 2
-                    val holdMs = maxHoldSec * 1000L
-                    brakeHoldJob?.cancel()
-                    brakeHoldJob = extensionScope.launch {
-                        if (holdMs > 0L) {
-                            delay(holdMs)
+                    if (continuousBrakeStartTime == 0L) {
+                        continuousBrakeStartTime = now
+                    } else if (now - continuousBrakeStartTime >= 200L) { // 200ms continuous deceleration filter
+                        if (!isBrakingActive) {
+                            isBrakingActive = true
+                            Timber.d("$TAG: 🚨 G-Brake Light triggered! Continuous 200ms Deceleration=%.2fg", brakingDecelerationG)
+                            applyBrakeLightModes()
                         }
-                        isBrakingActive = false
-                        Timber.d("$TAG: G-Brake Light cleared after ${maxHoldSec}s hold time")
-                        clearBrakeLightModes()
+                        val maxHoldSec = brakeAssignments.maxOfOrNull { it.brakeHoldTimeSeconds } ?: 2
+                        val holdMs = maxHoldSec * 1000L
+                        brakeHoldJob?.cancel()
+                        brakeHoldJob = extensionScope.launch {
+                            if (holdMs > 0L) {
+                                delay(holdMs)
+                            }
+                            isBrakingActive = false
+                            continuousBrakeStartTime = 0L
+                            Timber.d("$TAG: G-Brake Light cleared after ${maxHoldSec}s hold time")
+                            clearBrakeLightModes()
+                        }
+                    }
+                } else {
+                    if (!isBrakingActive) {
+                        continuousBrakeStartTime = 0L
                     }
                 }
             }
