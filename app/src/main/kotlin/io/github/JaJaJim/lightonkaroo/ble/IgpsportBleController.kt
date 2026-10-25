@@ -1,5 +1,7 @@
 package io.github.JaJaJim.lightonkaroo.ble
 
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanSettings
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.DiscoveredLight
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
@@ -144,10 +146,19 @@ class IgpsportBleController(context: Context) : LightController {
             }
         }
         try {
-            val settings = android.bluetooth.le.ScanSettings.Builder()
-                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED)
+            val filters = if (isSettingsUiActive || assignedDeviceIds.isEmpty()) {
+                null
+            } else {
+                assignedDeviceIds.map { address ->
+                    ScanFilter.Builder()
+                        .setDeviceAddress(address)
+                        .build()
+                }
+            }
+            val settings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                 .build()
-            scanner.startScan(null, settings, callback)
+            scanner.startScan(filters, settings, callback)
             scanCallback = callback
             scope.launch {
                 delay(10_000L)

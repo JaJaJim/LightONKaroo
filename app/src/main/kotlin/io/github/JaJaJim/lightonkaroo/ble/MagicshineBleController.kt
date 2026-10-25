@@ -143,10 +143,19 @@ class MagicshineBleController(context: Context) : LightController {
             }
         }
         try {
+            val filters = if (isSettingsUiActive || assignedDeviceIds.isEmpty()) {
+                null
+            } else {
+                assignedDeviceIds.map { address ->
+                    android.bluetooth.le.ScanFilter.Builder()
+                        .setDeviceAddress(address)
+                        .build()
+                }
+            }
             val settings = ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                 .build()
-            scanner.startScan(null, settings, callback)
+            scanner.startScan(filters, settings, callback)
             scanCallback = callback
             scope.launch {
                 delay(10_000L)

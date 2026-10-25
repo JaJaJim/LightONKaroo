@@ -532,12 +532,22 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             }
 
             try {
+                val assignedBleIds = engine.settings.lightAssignments.filter { it.enabled && (it.protocol == LightProtocol.BLE || it.protocol == LightProtocol.IGPSPORT_BLE) }.map { it.deviceId }
+                val filters = if (settingsUiActive || assignedBleIds.isEmpty()) {
+                    null // Open scan during Settings UI discovery
+                } else {
+                    assignedBleIds.map { address ->
+                        android.bluetooth.le.ScanFilter.Builder()
+                            .setDeviceAddress(address)
+                            .build()
+                    }
+                }
                 val settings = android.bluetooth.le.ScanSettings.Builder()
                     .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED)
                     .build()
-                scanner.startScan(null, settings, callback)
+                scanner.startScan(filters, settings, callback)
                 unifiedScanCallback = callback
-                Timber.d("$TAG: Single unified BLE scan started successfully (SCAN_MODE_BALANCED)")
+                Timber.d("$TAG: Single unified BLE scan started successfully (settingsUiActive=$settingsUiActive, filters=${filters?.size ?: 0})")
 
                 extensionScope.launch {
                     delay(10_000L)
