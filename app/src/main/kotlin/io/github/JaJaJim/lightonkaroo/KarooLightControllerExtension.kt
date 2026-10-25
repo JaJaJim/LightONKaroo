@@ -320,11 +320,15 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                         Timber.d("$TAG: 🚨 G-Brake Light triggered! DeltaG=%.2f", deltaG)
                         applyUnifiedModes()
                     }
+                    val maxHoldSec = brakeAssignments.maxOfOrNull { it.brakeHoldTimeSeconds } ?: 2
+                    val holdMs = maxHoldSec * 1000L
                     brakeHoldJob?.cancel()
                     brakeHoldJob = extensionScope.launch {
-                        delay(2000L)
+                        if (holdMs > 0L) {
+                            delay(holdMs)
+                        }
                         isBrakingActive = false
-                        Timber.d("$TAG: G-Brake Light cleared")
+                        Timber.d("$TAG: G-Brake Light cleared after ${maxHoldSec}s hold time")
                         applyUnifiedModes()
                     }
                 }

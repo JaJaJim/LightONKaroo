@@ -549,6 +549,7 @@ private fun StepperSlider(
     range: IntRange,
     step: Int = 1,
     unit: String = "",
+    displayValueFormatter: ((Int) -> String)? = null,
     onSaveValue: (Int) -> Unit,
 ) {
     var currentValue by remember(value) { mutableStateOf(value.coerceIn(range.first, range.last)) }
@@ -595,8 +596,11 @@ private fun StepperSlider(
                     Text("-", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
 
+                val formattedText = displayValueFormatter?.invoke(currentValue)
+                    ?: if (unit.isNotEmpty()) "${currentValue}$unit" else "$currentValue"
+
                 Text(
-                    if (unit.isNotEmpty()) "${currentValue}$unit" else "$currentValue",
+                    formattedText,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -669,6 +673,7 @@ private fun LightCard(
 
     val brakeLightEnabled = assignment?.brakeLightEnabled ?: false
     val brakeGThreshold = assignment?.brakeGThreshold ?: 0.20f
+    val brakeHoldTimeSeconds = assignment?.brakeHoldTimeSeconds ?: 2
     val brakeLightMode = assignment?.brakeLightMode ?: "FAST_FLASH"
     val speedAdaptiveEnabled = assignment?.speedAdaptiveEnabled ?: false
     val speedThresholdKmh = assignment?.speedThresholdKmh ?: 30
@@ -691,6 +696,7 @@ private fun LightCard(
         newCustomSlot6: CustomSlotConfig = assignment?.customSlot6 ?: CustomSlotConfig(6, 0, 10, 10, 10, false),
         newBrakeLightEnabled: Boolean = brakeLightEnabled,
         newBrakeGThreshold: Float = brakeGThreshold,
+        newBrakeHoldTimeSeconds: Int = brakeHoldTimeSeconds,
         newBrakeLightMode: String = brakeLightMode,
         newSpeedAdaptiveEnabled: Boolean = speedAdaptiveEnabled,
         newSpeedThresholdKmh: Int = speedThresholdKmh,
@@ -718,6 +724,7 @@ private fun LightCard(
                 customSlot6 = newCustomSlot6,
                 brakeLightEnabled = newBrakeLightEnabled,
                 brakeGThreshold = newBrakeGThreshold,
+                brakeHoldTimeSeconds = newBrakeHoldTimeSeconds,
                 brakeLightMode = newBrakeLightMode,
                 speedAdaptiveEnabled = newSpeedAdaptiveEnabled,
                 speedThresholdKmh = newSpeedThresholdKmh,
@@ -908,12 +915,25 @@ private fun LightCard(
                     StepperSlider(
                         label = "Brake Sensitivity",
                         value = currentG,
-                        range = 10..60,
+                        range = 10..50,
                         step = 5,
-                        unit = "g",
+                        displayValueFormatter = { gInt -> "%.2f g".format(gInt / 100f) },
                         onSaveValue = { gInt ->
                             currentG = gInt
                             save(newBrakeGThreshold = gInt / 100f)
+                        },
+                    )
+
+                    val brakeHoldTime = assignment?.brakeHoldTimeSeconds ?: 2
+                    StepperSlider(
+                        label = "Brake Hold Time",
+                        subtitle = "Duration the brake light stays active after decelerating",
+                        value = brakeHoldTime,
+                        range = 0..5,
+                        step = 1,
+                        unit = " s",
+                        onSaveValue = { holdSec ->
+                            save(newBrakeHoldTimeSeconds = holdSec)
                         },
                     )
 

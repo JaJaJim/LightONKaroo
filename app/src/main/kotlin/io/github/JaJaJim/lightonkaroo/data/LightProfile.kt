@@ -47,6 +47,7 @@ data class LightAssignment(
     val customSlot6: CustomSlotConfig = CustomSlotConfig(6, 0, 10, 10, 10, false),
     val brakeLightEnabled: Boolean = false,
     val brakeGThreshold: Float = 0.20f,
+    val brakeHoldTimeSeconds: Int = 2,
     val brakeLightMode: String = "FAST_FLASH",
     val speedAdaptiveEnabled: Boolean = false,
     val speedThresholdKmh: Int = 30,

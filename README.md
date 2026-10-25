@@ -58,7 +58,7 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 📝 Changelog
 ### v0.1.6-R3 "iGPSport"
-- **G-BRAKE LIGHT**: Integrated Karoo accelerometer G-sensor brake light activation. Automatically triggers configurable brake light mode (e.g. Fast Flash) upon decelerating above target sensitivity (0.10g to 0.60g), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light.
+- **G-BRAKE LIGHT**: Integrated Karoo accelerometer G-sensor brake light activation. Automatically triggers configurable brake light mode (e.g. Fast Flash) upon decelerating above target sensitivity (0.10g to 0.50g) with configurable hold time (0s to 5s), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light.
 - **SPEED-ADAPTIVE LIGHTING**: Automatically switches from Primary ON to Secondary ON mode when exceeding target GPS speed (10 km/h to 40 km/h), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light > Speed-Adaptive.
 - **DYNAMIC KAROO OS DAY/NIGHT MODE CONTRAST**: Automatic text and accent color switching for high-contrast crisp black text (`#1C1B1F`) in Day Mode (Light Theme) and glowing white text (`#FFFFFF`) in Night Mode (Dark Theme).
 - **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**: 6 Custom Slots for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`) with stepless 0–100% sliders and pattern type selection (Steady, Flash, SOS/Breath), saved permanently in `light_assignments.json`.
