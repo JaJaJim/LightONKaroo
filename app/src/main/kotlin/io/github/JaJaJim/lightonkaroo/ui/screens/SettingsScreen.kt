@@ -539,6 +539,48 @@ private fun DataFieldAppearanceSection(
         unit = "",
         onSaveValue = { onSave(settings.copy(glowIntensity = it)) },
     )
+
+    Spacer(modifier = Modifier.height(12.dp))
+    HorizontalDivider()
+    Spacer(modifier = Modifier.height(8.dp))
+
+    val repository = remember { io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.repository }
+    val scope = rememberCoroutineScope()
+    var showResetConfirm by remember { mutableStateOf(false) }
+
+    if (showResetConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset All Settings?") },
+            text = { Text("This will clear all saved light profiles, custom slots, and preferences, restoring clean factory defaults.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showResetConfirm = false
+                        scope.launch {
+                            repository?.resetToFactoryDefaults()
+                            onSave(LightControllerSettings())
+                        }
+                    },
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showResetConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    OutlinedButton(
+        onClick = { showResetConfirm = true },
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("⚠️ Reset All Settings to Factory Defaults", fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable

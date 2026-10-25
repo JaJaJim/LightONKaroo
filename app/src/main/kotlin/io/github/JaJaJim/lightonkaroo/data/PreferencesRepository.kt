@@ -30,6 +30,12 @@ class PreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun resetToFactoryDefaults() {
+        context.dataStore.edit { preferences ->
+            preferences.clear()
+        }
+    }
+
     private fun getCurrentSettings(preferences: Preferences): LightControllerSettings {
         val settingsJson = preferences[SETTINGS_KEY]
         return if (settingsJson != null) {
