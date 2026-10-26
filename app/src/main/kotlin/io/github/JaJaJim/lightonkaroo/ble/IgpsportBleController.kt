@@ -507,11 +507,7 @@ class IgpsportBleController(context: Context) : LightController {
         val command = IgpsportProtocol.buildCustomModeConfigCommandDualBeam(
             slotNumber, patternType, highBeamPct, lowBeamPct
         )
-        scope.launch {
-            sendFrame(address, command)
-            delay(100)
-            setMode(address, "CUSTOM_$slotNumber")
-        }
+        scope.launch { sendFrame(address, command) }
     }
 
     fun setCustomModeConfigSingleBeam(
@@ -523,11 +519,7 @@ class IgpsportBleController(context: Context) : LightController {
         val command = IgpsportProtocol.buildCustomModeConfigCommandSingleBeam(
             slotNumber, patternType, mainPct
         )
-        scope.launch {
-            sendFrame(address, command)
-            delay(100)
-            setMode(address, "CUSTOM_$slotNumber")
-        }
+        scope.launch { sendFrame(address, command) }
     }
 
     private suspend fun sendFrame(address: String, frame: ByteArray) {

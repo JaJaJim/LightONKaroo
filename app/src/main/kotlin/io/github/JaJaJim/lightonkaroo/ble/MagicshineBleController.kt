@@ -371,7 +371,7 @@ class MagicshineBleController(context: Context) : LightController {
         }
     }
 
-    fun setCustomSlotLivePreview(deviceId: String, slotNumber: Int, patternType: Int, brightnessPct: Int) {
+    fun saveCustomSlotConfig(deviceId: String, slotNumber: Int, patternType: Int, brightnessPct: Int) {
         val config = deviceConfigs.getOrPut(deviceId) { MagicshineDeviceConfig.forDevice("Magicshine") }
         val prefix = when (patternType) {
             1 -> "FLASH"

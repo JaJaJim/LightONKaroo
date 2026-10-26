@@ -1128,11 +1128,6 @@ private fun LightCard(
                                 onSelected = { selected ->
                                     val newPattern = selected.toIntOrNull() ?: 0
                                     saveSlot(slotConfig.copy(patternType = newPattern))
-                                    if (isDualBeam) {
-                                        igpController?.setCustomModeConfig(light.id, slot, newPattern, highBeamPct, lowBeamPct)
-                                    } else {
-                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, newPattern, mainPct)
-                                    }
                                 },
                             )
 
@@ -1145,7 +1140,6 @@ private fun LightCard(
                                     unit = "%",
                                     onSaveValue = { pct ->
                                         saveSlot(slotConfig.copy(highBeamPct = pct))
-                                        igpController?.setCustomModeConfig(light.id, slot, patternType, pct, lowBeamPct)
                                     },
                                 )
 
@@ -1157,7 +1151,6 @@ private fun LightCard(
                                     unit = "%",
                                     onSaveValue = { pct ->
                                         saveSlot(slotConfig.copy(lowBeamPct = pct))
-                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, pct)
                                     },
                                 )
                             } else {
@@ -1169,8 +1162,32 @@ private fun LightCard(
                                     unit = "%",
                                     onSaveValue = { pct ->
                                         saveSlot(slotConfig.copy(mainPct = pct))
-                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, pct)
                                     },
+                                )
+                            }
+
+                            var slotSavedStatus by remember { mutableStateOf(false) }
+                            Button(
+                                onClick = {
+                                    if (isDualBeam) {
+                                        igpController?.setCustomModeConfig(light.id, slot, patternType, highBeamPct, lowBeamPct)
+                                    } else {
+                                        igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
+                                    }
+                                    slotSavedStatus = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            ) {
+                                Text("💾 Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary)
+                            }
+
+                            if (slotSavedStatus) {
+                                Text(
+                                    "✅ Slot $slot saved to light!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF32E09A),
                                 )
                             }
                         }
@@ -1260,8 +1277,6 @@ private fun LightCard(
                                 onSelected = { selected ->
                                     val newPattern = selected.toIntOrNull() ?: 0
                                     saveSlot(slotConfig.copy(patternType = newPattern))
-                                    val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
-                                    msController?.setCustomSlotLivePreview(light.id, slot, newPattern, mainPct)
                                 },
                             )
 
@@ -1273,10 +1288,30 @@ private fun LightCard(
                                 unit = "%",
                                 onSaveValue = { pct ->
                                     saveSlot(slotConfig.copy(mainPct = pct))
-                                    val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
-                                    msController?.setCustomSlotLivePreview(light.id, slot, patternType, pct)
                                 },
                             )
+
+                            var slotSavedStatus by remember { mutableStateOf(false) }
+                            Button(
+                                onClick = {
+                                    val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
+                                    msController?.saveCustomSlotConfig(light.id, slot, patternType, mainPct)
+                                    slotSavedStatus = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            ) {
+                                Text("💾 Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary)
+                            }
+
+                            if (slotSavedStatus) {
+                                Text(
+                                    "✅ Slot $slot saved to light!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF32E09A),
+                                )
+                            }
                         }
                         if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
                     }
