@@ -57,9 +57,15 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S / 1300Pro and iGPSPORT VS1800S. Implemented speculative support for VS1200S, VS800S, and VS500 series smart lights based on igpsport-karoo.
 
 ## 📝 Changelog
+### v0.1.6-R4 "iGPSport"
+- **iGPSPORT CUSTOM SLOTS FIX**: Restricted iGPSPORT custom profiles to **3 Custom Slots (`Custom 1`, `Custom 2`, `Custom 3`)** matching hardware firmware limits, and added dedicated per-slot rectangular `Save` buttons (4dp rounded corners) writing directly to all 3 LED channels (`HIGH_BEAM`, `LOW_BEAM`, `MAIN`) for VS1800S, VS1200S, VS800S, and VS500.
+- **EXPERIMENTAL G-BRAKE LIGHT**: Integrated Karoo accelerometer G-sensor brake light activation. Automatically triggers configurable brake light mode (e.g. Fast Flash) upon decelerating along the longitudinal Y-axis above target sensitivity (`0.10 g` to `0.50 g`) for at least **200ms continuous deceleration**, with configurable hold time (`0 s` to `5 s`), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light.
+- **EXPERIMENTAL SPEED-ADAPTIVE LIGHTING**: Automatically switches from Primary ON to Secondary ON mode when exceeding target GPS speed (`10 km/h` to `40 km/h`), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light > Speed-Adaptive.
+- **MAC ADDRESS HARDWARE SCANFILTER**: Implemented 2-phase Bluetooth scan optimization (open scan during Settings UI discovery for 100% detection, MAC address hardware filter during active rides for zero CPU overhead and maximum battery savings).
+- **AUTOMATIC VERSION DATA AUTO-CLEANUP**: Automatically detects new APK version installation upon startup and clears stale JSON data on first boot, preventing version upgrade cache conflicts.
+- **RESET ALL SETTINGS BUTTON**: Added `Reset All Settings` button with confirmation dialog in Settings UI that clears all stored settings and automatically triggers a fresh discovery scan.
+
 ### v0.1.6-R3 "iGPSport"
-- **G-BRAKE LIGHT**: Integrated Karoo accelerometer G-sensor brake light activation. Automatically triggers configurable brake light mode (e.g. Fast Flash) upon decelerating above target sensitivity (0.10g to 0.50g) with configurable hold time (0s to 5s), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light.
-- **SPEED-ADAPTIVE LIGHTING**: Automatically switches from Primary ON to Secondary ON mode when exceeding target GPS speed (10 km/h to 40 km/h), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light > Speed-Adaptive.
 - **DYNAMIC KAROO OS DAY/NIGHT MODE CONTRAST**: Automatic text and accent color switching for high-contrast crisp black text (`#1C1B1F`) in Day Mode (Light Theme) and glowing white text (`#FFFFFF`) in Night Mode (Dark Theme).
 - **MAGICSHINE & IGPSPORT 6 CUSTOM SLOTS**: 6 Custom Slots for both iGPSPORT and Magicshine lights (`Custom 1` through `Custom 6`) with stepless 0–100% sliders and pattern type selection (Steady, Flash, SOS/Breath), saved permanently in `light_assignments.json`.
 - **UI POLISH & EXPAND ARROW ICON**: Replaced Custom Profiles switch with an intuitive `▼` / `▲` expand/collapse arrow icon, formatted battery level cleanly onto a dedicated line (`\nBattery Level 80%`), and fixed `1800` contains `800` substring matching bug for VS1800S.
