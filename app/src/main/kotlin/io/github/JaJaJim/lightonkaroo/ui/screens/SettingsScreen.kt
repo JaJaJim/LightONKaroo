@@ -1166,7 +1166,6 @@ private fun LightCard(
                                 )
                             }
 
-                            var slotSavedStatus by remember { mutableStateOf(false) }
                             Button(
                                 onClick = {
                                     if (isDualBeam) {
@@ -1174,21 +1173,12 @@ private fun LightCard(
                                     } else {
                                         igpController?.setCustomModeConfigSingleBeam(light.id, slot, patternType, mainPct)
                                     }
-                                    slotSavedStatus = true
                                 },
+                                shape = RoundedCornerShape(4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             ) {
-                                Text("💾 Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary)
-                            }
-
-                            if (slotSavedStatus) {
-                                Text(
-                                    "✅ Slot $slot saved to light!",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF32E09A),
-                                )
+                                Text("Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (slot < 3) Spacer(modifier = Modifier.height(4.dp))
@@ -1291,26 +1281,16 @@ private fun LightCard(
                                 },
                             )
 
-                            var slotSavedStatus by remember { mutableStateOf(false) }
                             Button(
                                 onClick = {
                                     val msController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.magicshineController
                                     msController?.saveCustomSlotConfig(light.id, slot, patternType, mainPct)
-                                    slotSavedStatus = true
                                 },
+                                shape = RoundedCornerShape(4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             ) {
-                                Text("💾 Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary)
-                            }
-
-                            if (slotSavedStatus) {
-                                Text(
-                                    "✅ Slot $slot saved to light!",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF32E09A),
-                                )
+                                Text("Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
