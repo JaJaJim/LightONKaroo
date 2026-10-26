@@ -1,4 +1,4 @@
-# LightONKaroo v0.1.6-R3 "iGPSport"
+# LightONKaroo v0.1.6-R4 "iGPSport"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3** (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
