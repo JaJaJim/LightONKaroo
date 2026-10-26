@@ -444,6 +444,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
     private fun loadSettings() {
         extensionScope.launch {
+            repository.checkAndAutoCleanStaleVersionData()
             var settings = repository.settingsFlow.first()
             val migrated = settings.migrateProfilesToAssignments()
             if (migrated != settings) {
