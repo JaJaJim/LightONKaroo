@@ -1408,18 +1408,20 @@ private fun LightCard(
                                 },
                             )
 
-                            var durationInt by remember { mutableStateOf((durationSec * 10f).toInt()) }
-                            StepperSlider(
-                                label = "Pattern Duration",
-                                value = durationInt,
-                                range = 1..100,
-                                step = 1,
-                                displayValueFormatter = { dInt -> "%.1f s".format(dInt / 10f) },
-                                onSaveValue = { dInt ->
-                                    durationInt = dInt
-                                    durationSec = dInt / 10f
-                                },
-                            )
+                            if (patternType != 0) {
+                                var durationInt by remember { mutableStateOf((durationSec * 10f).toInt()) }
+                                StepperSlider(
+                                    label = "Pattern Duration",
+                                    value = durationInt,
+                                    range = 1..100,
+                                    step = 1,
+                                    displayValueFormatter = { dInt -> "%.1f s".format(dInt / 10f) },
+                                    onSaveValue = { dInt ->
+                                        durationInt = dInt
+                                        durationSec = dInt / 10f
+                                    },
+                                )
+                            }
 
                             Button(
                                 onClick = {

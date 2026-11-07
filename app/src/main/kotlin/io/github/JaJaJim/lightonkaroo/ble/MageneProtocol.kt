@@ -34,13 +34,13 @@ object MageneProtocol {
     fun buildModeCommand(modeIndex: Int): ByteArray {
         val content = ByteArray(16)
         content[0] = nextSeq()
-        content[1] = if (modeIndex in listOf(3, 4, 5)) 0x40.toByte() else 0x20.toByte()
+        content[1] = if (modeIndex in listOf(3, 4, 5, 7, 8, 10)) 0x40.toByte() else 0x20.toByte()
         content[2] = 0x00
         content[3] = 0x11
         content[4] = 0x11
         content[5] = 0x01
         content[6] = 0xC4.toByte() // Active Output
-        content[7] = (modeIndex and 0xFF).toByte()
+        content[7] = 0x00.toByte()
         return content
     }
 
