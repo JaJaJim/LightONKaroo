@@ -20,28 +20,25 @@ object MageneProtocol {
     }
 
     fun buildOffCommand(): ByteArray {
-        val content = ByteArray(16)
-        content[0] = nextSeq()
-        content[1] = 0x40
-        content[2] = 0x00
-        content[3] = 0x11
-        content[4] = 0x11
-        content[5] = 0x01
-        content[6] = 0x80.toByte() // Standby
-        return content
+        return MagicshineProtocol.buildOffCommand(channel = 0)
     }
 
-    fun buildModeCommand(modeIndex: Int): ByteArray {
-        val content = ByteArray(16)
-        content[0] = nextSeq()
-        content[1] = if (modeIndex in listOf(3, 4, 5, 7, 8, 10)) 0x40.toByte() else 0x20.toByte()
-        content[2] = 0x00
-        content[3] = 0x11
-        content[4] = 0x11
-        content[5] = 0x01
-        content[6] = 0xC4.toByte() // Active Output
-        content[7] = 0x00.toByte()
-        return content
+    fun buildModeCommand(modeIndex: Int, brightPct: Int = 100): ByteArray {
+        val modelCode = when (modeIndex) {
+            1, 2, 3 -> MagicshineProtocol.MODE_STEADY
+            4, 5 -> MagicshineProtocol.MODE_FAST_FLASH
+            6 -> MagicshineProtocol.MODE_SOS
+            else -> MagicshineProtocol.MODE_STEADY
+        }
+        val pct = when (modeIndex) {
+            1 -> 25
+            2 -> 50
+            3, 4 -> 100
+            5 -> 50
+            6 -> 100
+            else -> brightPct.coerceIn(0, 100)
+        }
+        return MagicshineProtocol.buildBrightCommand(presetIndex = 1, channel = 0, model = modelCode, bright = pct)
     }
 
     fun buildAutoPowerOffCommand(enabled: Boolean, timeoutSeconds: Int): ByteArray {
@@ -76,22 +73,13 @@ object MageneProtocol {
         lumenValue: Int,
         durationSec: Float,
     ): ByteArray {
-        val content = ByteArray(16)
-        content[0] = nextSeq()
-        content[1] = if (patternType == 1) 0x40.toByte() else 0x20.toByte()
-        content[2] = 0x00
-        content[3] = 0x11
-        content[4] = 0x11
-        content[5] = 0x01
-        content[6] = 0xC4.toByte() // Active Output
-        val lm = lumenValue.coerceIn(100, 1200)
-        content[7] = (lm and 0xFF).toByte()
-        content[8] = ((lm shl 8) and 0xFF).toByte()
-        val tenths = (durationSec * 10f).toInt().coerceIn(1, 1000)
-        content[9] = (tenths and 0xFF).toByte()
-        content[10] = ((tenths shl 8) and 0xFF).toByte()
-        content[11] = (slotNumber.coerceIn(1, 4) and 0xFF).toByte()
-        return content
+        val modelCode = when (patternType) {
+            1 -> MagicshineProtocol.MODE_FAST_FLASH
+            2 -> MagicshineProtocol.MODE_SOS
+            else -> MagicshineProtocol.MODE_STEADY
+        }
+        val brightPct = (lumenValue / 12).coerceIn(0, 100)
+        return MagicshineProtocol.buildBrightCommand(presetIndex = slotNumber.coerceIn(1, 4), channel = 0, model = modelCode, bright = brightPct)
     }
 
     fun bytesToHex(bytes: ByteArray): String =
