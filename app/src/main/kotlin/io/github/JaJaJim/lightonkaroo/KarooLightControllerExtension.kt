@@ -3,6 +3,7 @@ package io.github.JaJaJim.lightonkaroo
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.ble.IgpsportBleController
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
+import io.github.JaJaJim.lightonkaroo.ble.MageneBleController
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
 import io.github.JaJaJim.lightonkaroo.data.PreferencesRepository
@@ -68,6 +69,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     internal lateinit var lightControl: KarooLightControl
     internal lateinit var magicshineController: MagicshineBleController
     internal lateinit var igpsportController: IgpsportBleController
+    internal lateinit var mageneController: MageneBleController
     private val lightControllers = mutableMapOf<LightProtocol, LightController>()
     internal lateinit var engine: LightControlEngine
     internal lateinit var repository: PreferencesRepository
@@ -113,16 +115,22 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         lightControl = KarooLightControl(applicationContext)
         magicshineController = MagicshineBleController(applicationContext)
         igpsportController = IgpsportBleController(applicationContext)
+        mageneController = MageneBleController(applicationContext)
 
         lightControllers[LightProtocol.ANT_PLUS] = lightControl
         lightControllers[LightProtocol.BLE] = magicshineController
         lightControllers[LightProtocol.IGPSPORT_BLE] = igpsportController
+        lightControllers[LightProtocol.MAGENE_BLE] = mageneController
 
         magicshineController.onDeviceConnected = {
             stopBleIfNotNeeded()
             engine.onApplyState?.invoke(engine.activeState.value)
         }
         igpsportController.onDeviceConnected = {
+            stopBleIfNotNeeded()
+            engine.onApplyState?.invoke(engine.activeState.value)
+        }
+        mageneController.onDeviceConnected = {
             stopBleIfNotNeeded()
             engine.onApplyState?.invoke(engine.activeState.value)
         }
@@ -143,16 +151,18 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
         setupGForceBrakeSensor()
 
-        // Merge ANT+, Magicshine BLE, and iGPSPORT BLE discovered lights
+        // Merge ANT+, Magicshine BLE, iGPSPORT BLE, and Magene BLE discovered lights
         extensionScope.launch {
             combine(
                 _antLights,
                 magicshineController.discoveredLights,
                 igpsportController.discoveredLights,
+                mageneController.discoveredLights,
                 lightControl.connectionStates,
                 lightControl.actualModes,
                 igpsportController.actualModes,
                 magicshineController.actualModes,
+                mageneController.actualModes,
             ) { flows ->
                 @Suppress("UNCHECKED_CAST")
                 val ant = flows[0] as List<DiscoveredLight>
@@ -161,15 +171,19 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 @Suppress("UNCHECKED_CAST")
                 val igp = flows[2] as List<DiscoveredLight>
                 @Suppress("UNCHECKED_CAST")
-                val connStates = flows[3] as Map<String, String>
+                val magene = flows[3] as List<DiscoveredLight>
                 @Suppress("UNCHECKED_CAST")
-                val antModes = flows[4] as Map<String, String>
+                val connStates = flows[4] as Map<String, String>
                 @Suppress("UNCHECKED_CAST")
-                val igpModes = flows[5] as Map<String, String>
+                val antModes = flows[5] as Map<String, String>
                 @Suppress("UNCHECKED_CAST")
-                val bleModes = flows[6] as Map<String, String>
+                val igpModes = flows[6] as Map<String, String>
+                @Suppress("UNCHECKED_CAST")
+                val bleModes = flows[7] as Map<String, String>
+                @Suppress("UNCHECKED_CAST")
+                val mageneModes = flows[8] as Map<String, String>
 
-                val mergedModes = antModes + igpModes + bleModes
+                val mergedModes = antModes + igpModes + bleModes + mageneModes
                 ant.map {
                     val connState = connStates[it.id]
                     val actualMode = mergedModes[it.id]
@@ -181,6 +195,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 } + ble.map {
                     it.copy(currentMode = mergedModes[it.id] ?: it.currentMode)
                 } + igp.map {
+                    it.copy(currentMode = mergedModes[it.id] ?: it.currentMode)
+                } + magene.map {
                     it.copy(currentMode = mergedModes[it.id] ?: it.currentMode)
                 }
             }.collect { merged ->
@@ -618,12 +634,23 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                             nameUpper.contains("MONTEER")
                         )
 
+                        val isMagene = !isIgpsport && !isMagicshine && (
+                            nameUpper.contains("MAGENE") ||
+                            nameUpper.contains("AT1200") ||
+                            nameUpper.contains("AT1600") ||
+                            nameUpper.contains("L508") ||
+                            nameUpper.contains("L308")
+                        )
+
                         if (isIgpsport) {
                             Timber.d("$TAG: Unified BLE scan found iGPSPORT light: $rawName ($address)")
                             igpsportController.registerFoundDevice(address, rawName)
                         } else if (isMagicshine) {
                             Timber.d("$TAG: Unified BLE scan found Magicshine light: $rawName ($address)")
                             magicshineController.registerFoundDevice(address, rawName)
+                        } else if (isMagene) {
+                            Timber.d("$TAG: Unified BLE scan found Magene light: $rawName ($address)")
+                            mageneController.registerFoundDevice(address, rawName)
                         }
                     } catch (e: Exception) {
                         Timber.w(e, "$TAG: Skipping unified scan result")

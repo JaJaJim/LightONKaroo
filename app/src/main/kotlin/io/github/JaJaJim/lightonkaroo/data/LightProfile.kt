@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 enum class LightRole { FRONT, REAR }
 
 @Serializable
-enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE }
+enum class LightProtocol { ANT_PLUS, BLE, IGPSPORT_BLE, MAGENE_BLE }
 
 @Serializable
 data class CustomSlotConfig(
@@ -121,6 +121,7 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
         if (supported != null && supported.isNotEmpty()) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
     }
     LightProtocol.IGPSPORT_BLE -> IgpsportDeviceModeProvider
+    LightProtocol.MAGENE_BLE -> io.github.JaJaJim.lightonkaroo.ble.MageneDeviceModeProvider
     LightProtocol.BLE -> {
         val config = deviceId?.let {
             KarooLightControllerExtension.getInstance()

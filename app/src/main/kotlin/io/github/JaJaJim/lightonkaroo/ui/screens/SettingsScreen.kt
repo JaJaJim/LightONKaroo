@@ -764,6 +764,7 @@ private fun LightCard(
             val protocolText = when (light.protocol) {
                 LightProtocol.ANT_PLUS -> "ANT+"
                 LightProtocol.IGPSPORT_BLE -> "iGPSPORT BLE"
+                LightProtocol.MAGENE_BLE -> "Magene BLE"
                 LightProtocol.BLE -> "BLE"
             }
             val statusText = if (light.connected) "Connected" else "Not found"
@@ -1294,6 +1295,144 @@ private fun LightCard(
                             }
                         }
                         if (slot < 6) Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+
+            val isMagene = light.protocol == LightProtocol.MAGENE_BLE ||
+                           light.manufacturer?.uppercase()?.contains("MAGENE") == true ||
+                           assignment?.protocol == LightProtocol.MAGENE_BLE
+
+            if (isMagene) {
+                HorizontalDivider()
+                val showCustomProfiles = assignment?.showCustomProfiles ?: false
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { save(newShowCustomProfiles = !showCustomProfiles) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Custom Light Profiles", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Configure 4 custom light slots (Lumens, pattern & duration)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { save(newShowCustomProfiles = !showCustomProfiles) }) {
+                        Text(
+                            text = if (showCustomProfiles) "▲" else "▼",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                if (showCustomProfiles) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val mageneController = io.github.JaJaJim.lightonkaroo.KarooLightControllerExtension.getInstance()?.mageneController
+
+                    for (slot in 1..4) {
+                        val slotConfig = when (slot) {
+                            1 -> assignment?.customSlot1 ?: CustomSlotConfig(1, 0, 100, 100, 100, false)
+                            2 -> assignment?.customSlot2 ?: CustomSlotConfig(2, 0, 50, 50, 50, false)
+                            3 -> assignment?.customSlot3 ?: CustomSlotConfig(3, 0, 25, 25, 25, false)
+                            else -> assignment?.customSlot4 ?: CustomSlotConfig(4, 0, 20, 20, 20, false)
+                        }
+
+                        fun saveSlot(updatedConfig: CustomSlotConfig) {
+                            when (slot) {
+                                1 -> save(newCustomSlot1 = updatedConfig)
+                                2 -> save(newCustomSlot2 = updatedConfig)
+                                3 -> save(newCustomSlot3 = updatedConfig)
+                                else -> save(newCustomSlot4 = updatedConfig)
+                            }
+                        }
+
+                        var patternType by remember(slotConfig.patternType) { mutableStateOf(slotConfig.patternType) }
+                        var lumens by remember(slotConfig.mainPct) { mutableStateOf((slotConfig.mainPct * 12).coerceIn(100, 1200)) }
+                        var durationSec by remember { mutableStateOf(3.6f) }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("Custom Slot $slot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                OutlinedButton(
+                                    onClick = {
+                                        mageneController?.previewCustomSlot(light.id, patternType, lumens, durationSec)
+                                    },
+                                    modifier = Modifier.height(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text("▶ Preview", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            InlineDropdown(
+                                label = "Pattern Type",
+                                selectedId = patternType.toString(),
+                                options = listOf(
+                                    "0" to "Steady",
+                                    "1" to "Flash",
+                                    "2" to "Breath",
+                                ),
+                                onSelected = { selected ->
+                                    patternType = selected.toIntOrNull() ?: 0
+                                    saveSlot(slotConfig.copy(patternType = patternType))
+                                },
+                            )
+
+                            StepperSlider(
+                                label = "Brightness",
+                                value = lumens,
+                                range = 100..1200,
+                                step = 50,
+                                unit = " lm",
+                                onSaveValue = { lm ->
+                                    lumens = lm
+                                    val pct = (lm / 12).coerceIn(0, 100)
+                                    saveSlot(slotConfig.copy(mainPct = pct))
+                                },
+                            )
+
+                            var durationInt by remember { mutableStateOf((durationSec * 10f).toInt()) }
+                            StepperSlider(
+                                label = "Pattern Duration",
+                                value = durationInt,
+                                range = 1..100,
+                                step = 1,
+                                displayValueFormatter = { dInt -> "%.1f s".format(dInt / 10f) },
+                                onSaveValue = { dInt ->
+                                    durationInt = dInt
+                                    durationSec = dInt / 10f
+                                },
+                            )
+
+                            Button(
+                                onClick = {
+                                    mageneController?.saveCustomSlotConfig(light.id, slot, patternType, lumens, durationSec)
+                                },
+                                shape = RoundedCornerShape(4.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            ) {
+                                Text("Save Slot $slot to Light", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (slot < 4) Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }
