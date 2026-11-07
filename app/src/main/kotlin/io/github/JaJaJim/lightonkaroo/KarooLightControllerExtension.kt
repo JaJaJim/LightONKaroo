@@ -485,6 +485,11 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             .filter { it.protocol == LightProtocol.IGPSPORT_BLE }
             .map { it.deviceId }
             .toSet()
+
+        mageneController.assignedDeviceIds = assignments
+            .filter { it.protocol == LightProtocol.MAGENE_BLE }
+            .map { it.deviceId }
+            .toSet()
     }
 
     fun testMode(deviceId: String, modeName: String) {
@@ -504,11 +509,16 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         for (id in igpsportController.assignedDeviceIds) {
             igpsportController.connect(id)
         }
+        for (id in mageneController.assignedDeviceIds) {
+            mageneController.connect(id)
+        }
         startBleIfNeeded()
         updateRadarMonitoring()
         if (settingsUiActive) {
             for (assignment in engine.settings.lightAssignments) {
-                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
+                if (assignment.enabled) {
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
+                }
             }
         }
     }
@@ -518,10 +528,12 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         settingsUiActive = active
         magicshineController.isSettingsUiActive = active
         igpsportController.isSettingsUiActive = active
+        mageneController.isSettingsUiActive = active
 
         if (active) {
             igpsportController.resetBackoff()
             magicshineController.resetBackoff()
+            mageneController.resetBackoff()
             lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
@@ -529,7 +541,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
             extensionScope.launch {
                 delay(500)
                 for (assignment in engine.settings.lightAssignments) {
-                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
+                    if (assignment.enabled) {
+                        lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
+                    }
                 }
             }
         } else {
@@ -549,8 +563,10 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     private fun allAssignedBleConnected(): Boolean {
         val magicshineAssigned = magicshineController.assignedDeviceIds
         val igpsportAssigned = igpsportController.assignedDeviceIds
+        val mageneAssigned = mageneController.assignedDeviceIds
         return (magicshineAssigned.isEmpty() || magicshineController.allConnected(magicshineAssigned)) &&
-               (igpsportAssigned.isEmpty() || igpsportController.allConnected(igpsportAssigned))
+               (igpsportAssigned.isEmpty() || igpsportController.allConnected(igpsportAssigned)) &&
+               (mageneAssigned.isEmpty() || mageneController.allConnected(mageneAssigned))
     }
 
     private fun startDiscoveryPolling() {
@@ -574,7 +590,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.enabled && (it.protocol == LightProtocol.BLE || it.protocol == LightProtocol.IGPSPORT_BLE) }
+        engine.settings.lightAssignments.any { it.enabled && (it.protocol == LightProtocol.BLE || it.protocol == LightProtocol.IGPSPORT_BLE || it.protocol == LightProtocol.MAGENE_BLE) }
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
@@ -588,6 +604,9 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
                 }
                 for (id in igpsportController.assignedDeviceIds) {
                     igpsportController.connect(id)
+                }
+                for (id in mageneController.assignedDeviceIds) {
+                    mageneController.connect(id)
                 }
                 if (settingsUiActive) {
                     Timber.d("$TAG: Starting single unified BLE discovery scan")
