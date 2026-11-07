@@ -147,13 +147,14 @@ class MageneBleController(
     }
 
     private suspend fun attemptConnect(address: String): Boolean {
-        val device = devices[address] ?: return false
-        val peripheral = device.peripheral
-        if (peripheral.state.value is ConnectionState.Connected) {
-            return characteristics.containsKey(address)
-        }
+        val peripheral = devices[address]?.peripheral
+            ?: centralManager.getPeripheralsById(listOf(address)).firstOrNull()
+            ?: return false
+        val name = devices[address]?.name ?: peripheral.name ?: "Magene"
+        devices.putIfAbsent(address, MageneBleDevice(peripheral, name))
 
         return try {
+            Timber.d("$TAG: Connecting to Magene light $address")
             val options = CentralManager.ConnectionOptions.Direct(
                 timeout = 8.seconds,
                 retry = 2,
@@ -169,24 +170,46 @@ class MageneBleController(
                     true
                 }
             } ?: false
-            if (!connected) return false
-
-            val targetUuid = Uuid.parse(MageneProtocol.WRITE_CHARACTERISTIC_UUID)
-            val servicesList = peripheral.services().value
-            val characteristic = servicesList.flatMap { it.characteristics }.firstOrNull { it.uuid == targetUuid }
-            if (characteristic != null) {
-                characteristics[address] = characteristic
-                Timber.d("$TAG: Connected to Magene light $address")
-                updateDiscoveredLights()
-                onDeviceConnected?.invoke()
-                true
-            } else {
-                false
+            if (!connected) {
+                Timber.w("$TAG: Connection timeout for Magene $address")
+                return false
             }
+
+            val characteristic = findTargetCharacteristic(peripheral)
+            if (characteristic == null) {
+                Timber.w("$TAG: Magene write characteristic not found for $address")
+                return false
+            }
+            characteristics[address] = characteristic
+            Timber.d("$TAG: Connected to Magene $address, write characteristic found")
+
+            delay(200L)
+            updateDiscoveredLights()
+            onDeviceConnected?.invoke()
+
+            peripheral.state.first { it is ConnectionState.Disconnected }
+            Timber.d("$TAG: Disconnected from Magene $address")
+            true
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: Connection failed to $address")
+            Timber.w(e, "$TAG: Connect attempt failed for Magene $address")
             false
+        } finally {
+            characteristics.remove(address)
+            updateDiscoveredLights()
         }
+    }
+
+    private suspend fun findTargetCharacteristic(peripheral: Peripheral): RemoteCharacteristic? {
+        val targetUuid = Uuid.parse(MageneProtocol.WRITE_CHARACTERISTIC_UUID)
+        for (attempt in 1..10) {
+            try {
+                val services = peripheral.services().value
+                val characteristic = services.flatMap { it.characteristics }.firstOrNull { it.uuid == targetUuid }
+                if (characteristic != null) return characteristic
+            } catch (_: Exception) { }
+            delay(360L)
+        }
+        return null
     }
 
     override fun setMode(deviceId: String, modeName: String) {
@@ -228,11 +251,12 @@ class MageneBleController(
         scope.launch {
             Timber.d("$TAG: 💾 Saving Magene custom slot $slotNumber to EEPROM for $deviceId")
             writeBytes(deviceId, MageneProtocol.buildPrivilegedModeCommand(true))
-            delay(150L)
+            delay(250L)
             val cmd = MageneProtocol.buildCustomSlotCommand(slotNumber, patternType, lumenValue, durationSec)
             writeBytes(deviceId, cmd)
-            delay(150L)
+            delay(250L)
             writeBytes(deviceId, MageneProtocol.buildPrivilegedModeCommand(false))
+            delay(250L)
             Timber.d("$TAG: 💾 Magene custom slot $slotNumber saved successfully!")
         }
     }
