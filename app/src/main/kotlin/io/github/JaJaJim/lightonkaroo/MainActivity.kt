@@ -93,6 +93,12 @@ class MainActivity : ComponentActivity() {
                     onTestMode = { deviceId, modeName ->
                         KarooLightControllerExtension.getInstance()?.testMode(deviceId, modeName)
                     },
+                    onFactoryReset = {
+                        lifecycleScope.launch {
+                            repository.resetToFactoryDefaults()
+                            KarooLightControllerExtension.getInstance()?.performFactoryReset()
+                        }
+                    },
                 )
             }
         }

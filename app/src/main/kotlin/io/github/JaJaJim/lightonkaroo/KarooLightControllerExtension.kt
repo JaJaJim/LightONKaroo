@@ -3,6 +3,7 @@ package io.github.JaJaJim.lightonkaroo
 import android.content.Context
 import io.github.JaJaJim.lightonkaroo.ble.IgpsportBleController
 import io.github.JaJaJim.lightonkaroo.ble.MagicshineBleController
+import io.github.JaJaJim.lightonkaroo.data.LightControllerSettings
 import io.github.JaJaJim.lightonkaroo.data.LightProtocol
 import io.github.JaJaJim.lightonkaroo.data.LightRole
 import io.github.JaJaJim.lightonkaroo.data.PreferencesRepository
@@ -82,7 +83,8 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
 
     @Volatile
     var isRadarThreatActive: Boolean = false
-        private set
+
+    val isBrakeLightActive = MutableStateFlow(false)
 
     private var lastThreatLevel: Int = 0
     private var lastRadarEventTimestamp = 0L
@@ -349,6 +351,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun applyBrakeLightModes() {
+        isBrakeLightActive.value = true
         for (assignment in engine.settings.lightAssignments) {
             if (!assignment.enabled || !assignment.brakeLightEnabled) continue
             if (isRadarThreatActive && assignment.useForThreatMode) continue
@@ -357,6 +360,7 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
     }
 
     private fun clearBrakeLightModes() {
+        isBrakeLightActive.value = false
         val state = engine.activeState.value
         for (assignment in engine.settings.lightAssignments) {
             if (!assignment.enabled || !assignment.brakeLightEnabled) continue
@@ -493,6 +497,22 @@ class KarooLightControllerExtension : KarooExtension("light-on-karoo", BuildConf
         if (settingsUiActive) {
             for (assignment in engine.settings.lightAssignments) {
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, "OFF")
+            }
+        }
+    }
+
+    fun performFactoryReset() {
+        extensionScope.launch {
+            try {
+                Timber.i("$TAG: 🏭 Executing Factory Reset...")
+                repository.resetToFactoryDefaults()
+                engine.settings = LightControllerSettings()
+                _discoveredLights.value = emptyList()
+                discoverKarooLights()
+                startUnifiedBleScan()
+                Timber.i("$TAG: 🏭 Factory Reset complete! ANT+ lights re-bound, BLE scan triggered.")
+            } catch (e: Exception) {
+                Timber.e(e, "$TAG: Error during factory reset")
             }
         }
     }

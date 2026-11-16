@@ -62,13 +62,23 @@ class LightStatusDataType(
 
         scope.launch {
             val actualModesFlow = ext?.lightControl?.actualModes ?: MutableStateFlow(emptyMap())
+            val brakeActiveFlow = ext?.isBrakeLightActive ?: MutableStateFlow(false)
+
+            data class StateQuad(
+                val activeState: Int,
+                val info: io.github.JaJaJim.lightonkaroo.engine.DisplayInfo,
+                val actualModes: Map<String, String>,
+                val isBrakeActive: Boolean,
+            )
+
             combine(
                 engine.activeState,
                 engine.displayInfo,
                 actualModesFlow,
-            ) { state, info, actualModes ->
-                Triple(state, info, actualModes)
-            }.collect { (activeState, info, actualModes) ->
+                brakeActiveFlow,
+            ) { activeState, info, actualModes, isBrakeActive ->
+                StateQuad(activeState, info, actualModes, isBrakeActive)
+            }.collect { (activeState, info, actualModes, isBrakeActive) ->
                 val remoteViews = RemoteViews(context.packageName, R.layout.light_status_view)
 
                 // Detect Karoo OS Day/Night Mode (Light vs Dark Theme)
@@ -78,14 +88,25 @@ class LightStatusDataType(
                 val defaultTextColor = if (isNightMode) Color.WHITE else Color.parseColor("#1C1B1F")
                 val primaryActiveColor = if (isNightMode) Color.parseColor("#ffe714") else Color.parseColor("#B38600")
                 val turquoiseColor = if (isNightMode) Color.parseColor("#32e09a") else Color.parseColor("#00897B")
+                val karooRedColor = Color.parseColor("#E52E2E")
 
-                val globalStatusText = when (activeState) {
-                    1 -> if (engine.settings.threeModeEnabled) "PRIMARY" else "ON"
-                    2 -> "SECONDARY"
+                val isThreatActive = ext?.isRadarThreatActive == true
+
+                val globalStatusText = when {
+                    activeState == 0 -> "OFF"
+                    isThreatActive -> "THREAT"
+                    isBrakeActive -> "G-BRAKE"
+                    activeState == 2 -> "SECONDARY"
+                    activeState == 1 -> if (engine.settings.threeModeEnabled) "PRIMARY" else "ON"
                     else -> "OFF"
                 }
                 remoteViews.setTextViewText(R.id.light_mode_text, globalStatusText)
-                val globalColor = if (activeState != 0) primaryActiveColor else defaultTextColor
+
+                val globalColor = when {
+                    activeState == 0 -> defaultTextColor
+                    isThreatActive || isBrakeActive -> karooRedColor
+                    else -> primaryActiveColor
+                }
                 remoteViews.setTextColor(R.id.light_mode_text, globalColor)
 
                 // Top-left indicator icon: Turquoise if ALL active lights connected, Default Text Color if any not found

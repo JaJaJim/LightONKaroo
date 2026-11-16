@@ -2,10 +2,10 @@
   "label": "LightONKaroo",
   "packageName": "io.github.JaJaJim.lightonkaroo",
   "iconUrl": "https://raw.githubusercontent.com/JaJaJim/LightONKaroo/main/docs/ic_light.png",
-  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6-R4/LightONKaroo-v0.1.6-R4.apk",
-  "latestVersion": "0.1.6-R4",
-  "latestVersionCode": 25,
+  "latestApkUrl": "https://github.com/JaJaJim/LightONKaroo/releases/download/LightONKaroo-v0.1.6-R5/LightONKaroo-v0.1.6-R5.apk",
+  "latestVersion": "0.1.6-R5",
+  "latestVersionCode": 26,
   "developer": "Peter Weber",
   "description": "Manual ANT+ and Bluetooth bike light control for Hammerhead Karoo 3 with Software Threat Mode, G-Brake Light, Speed-Adaptive Lighting, and iGPSPORT smart light support.",
-  "releaseNotes": "* iGPSPORT Custom Slots Fix: Dedicated per-slot Save buttons (4dp rounded corners) writing directly to all 3 LED channels (High, Low, Main) for VS1800S, VS1200S, VS800S, VS500\n* Experimental G-Brake Light: Karoo accelerometer G-sensor brake light (0.10g to 0.50g) with 200ms continuous Y-axis deceleration filter and 0s..5s hold time. Priority: Hard OFF > Radar Threat > G-Brake Light\n* Experimental Speed-Adaptive Lighting: Auto-switching from Primary ON to Secondary ON above target GPS speed (10 km/h to 40 km/h). Priority: Hard OFF > Radar Threat > G-Brake Light > Speed-Adaptive\n* Automatic Version Auto-Cleanup: Detects new APK version installation and automatically clears stale JSON data on first boot\n* Reset All Settings Button: Factory reset button with confirmation dialog"
+  "releaseNotes": "* Karoo OS 1.669.2569.20 Compatibility Fix: Integrated local write-only Parcelable stand-ins (HammerheadDeviceParcel & LightMode) inspired by szaffarano/karoofirefly PR #51 to bypass SELinux package read restrictions (kos_app_file) and restore ANT+ light control IPC transactions with SensorService\n* Real-Time Data Field Status Indicators: Real-time G-BRAKE deceleration indicator (in Karoo Red #E52E2E) and dynamic SECONDARY speed-adaptive lighting status text\n* Factory Reset Section: Dedicated Factory Reset card with rounded corners in Karoo Red (#E52E2E) that clears saved JSON preferences and UI cards, re-binds saved ANT+ lights, and triggers a fresh BLE scan\n* Pure English UI: Standardized all UI labels and settings to clean English"
 }

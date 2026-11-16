@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -29,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +66,7 @@ fun SettingsScreen(
     onUpdateAssignment: (String, LightAssignment?) -> Unit = { _, _ -> },
     onDeleteLight: (DiscoveredLight) -> Unit = {},
     onTestMode: (String, String) -> Unit = { _, _ -> },
+    onFactoryReset: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -113,6 +116,12 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         DataFieldAppearanceSection(settings = settings, onSave = onSave)
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        FactoryResetSection(onFactoryReset = onFactoryReset)
 
         Spacer(modifier = Modifier.height(16.dp))
         FooterSection()
@@ -1449,5 +1458,70 @@ private fun InlineDropdown(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun FactoryResetSection(onFactoryReset: () -> Unit) {
+    var showConfirmationDialog by remember { mutableStateOf(false) }
+    val karooRed = Color(0xFFE52E2E)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(width = 1.dp, color = karooRed, shape = RoundedCornerShape(8.dp))
+            .background(karooRed.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+            .padding(12.dp),
+    ) {
+        Text(
+            "Reset to Factory Defaults",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = karooRed,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            "Clears all UI boxes & JSON data, re-binds saved ANT+ lights, and triggers a fresh Bluetooth (BLE) light scan.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = { showConfirmationDialog = true },
+            colors = ButtonDefaults.buttonColors(containerColor = karooRed),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            Text("Reset to Factory Defaults", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
+
+    if (showConfirmationDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmationDialog = false },
+            title = { Text("Reset to Factory Defaults?") },
+            text = { Text("All saved configurations, light assignments, and JSON settings will be permanently cleared. ANT+ lights will be re-bound, and a new Bluetooth (BLE) scan will be started.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmationDialog = false
+                        onFactoryReset()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = karooRed),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text("Reset", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmationDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }

@@ -1,8 +1,10 @@
-# LightONKaroo v0.1.6-R4 "iGPSport"
+# LightONKaroo v0.1.6-R5 "iGPSport"
 
 **LightONKaroo** is a manual and intelligent bike light controller for the **Hammerhead Karoo 3** (Karoo 2 potentially functional but untested). Its primary purpose is to provide a simple data field to toggle your configured ANT+ and Bluetooth (BLE) lights ON and OFF during your ride, combined with an advanced **Software Threat Mode** that reacts to approaching radar vehicles.
 
 This project is a fork of Dennis Strasser's [KarooFireFly](https://github.com/derstrassi/karoofirefly), created by **Peter Weber** using the **Google Gemini AI Agent**. It incorporates BLE smart light protocol implementations for **iGPSPORT** lights based on Tiago Fontes Dias's [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) project.
+
+Special thanks to **Stefano Zaffarano** ([szaffarano](https://github.com/szaffarano)) for the Karoo OS `1.669.2569.20` IPC parcelable workaround from his [karoofirefly](https://github.com/szaffarano/karoofirefly) fork (PR #51), and to community contributors **Erkop33** and **lukaszzsch** for valuable guidance, ideas, and feedback.
 
 ## ⚠️ Important Warning
 > [!WARNING]
@@ -16,6 +18,11 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 *If this is not done, the Karoo firmware and this extension will fight for control of the light.*
 
 ## 🚀 Features
+- **Karoo OS Firmware 1.669.2569.20 Compatibility**: Uses local write-only Parcelable stand-ins (`HammerheadDeviceParcel` and `LightMode`) to bypass SELinux package read restrictions (`kos_app_file`) and restore ANT+ light control Binder IPC transactions with Karoo's `SensorService`.
+- **Real-Time Data Field Status Indicators**:
+  - **G-Brake Light Indicator**: Displays real-time **`G-BRAKE`** text in official Karoo Red (`#E52E2E`) while decelerating above configured G-sensitivity threshold.
+  - **Speed-Adaptive Mode Indicator**: Displays **`SECONDARY`** when exceeding target GPS speed and automatically reverts to **`PRIMARY`** when speed drops below threshold.
+- **Factory Reset Section**: Dedicated settings card with rounded corners in official Karoo Red (`#E52E2E`) that clears saved JSON preferences and UI cards, re-binds saved ANT+ lights, and triggers a fresh Bluetooth (BLE) light scan.
 - **Software Threat Mode**:
   - **Radar-Triggered Warning**: Automatically activates assigned warning lighting (e.g. Fast Flash) when compatible ANT+ bike radars detect approaching vehicles.
   - **Physical Light Confirmation**: Radar status icon turns Turquoise only when participating threat lights successfully confirm their mode over ANT+ or BLE.
@@ -32,13 +39,9 @@ To allow this extension to control your lights, you **must** disable the Karoo's
   - **Model-Aware Custom Profiles**: Model-specific controls for **VS1800S** (Dual Beam: High Beam & Low Beam sliders for channels 0 & 1) and **VS1200S / VS800S / VS500** (Single Beam: Brightness slider for MAIN channel 2). Auto-dimming options are suppressed for VS500 (lacks ambient light sensor).
   - **Attribution**: Based on Tiago Fontes Dias's ([tiagodias00](https://github.com/tiagodias00)) [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) library under the MIT License.
   - **Testing Note**: Tested with the **VS1800S** model; support for VS1200S, VS800S, and VS500 is implemented speculatively based on `igpsport-karoo` protocol definitions.
-- **ANT+ Light Command AIDL Fix**:
-  - **Dynamic AIDL Descriptor Discovery**: Implemented dynamic transaction descriptor matching (`LightCommandConnectionAIDL` on TX code 18), resolving `SecurityException: Binder invocation to an incorrect interface` and restoring instant control for all ANT+ bike lights.
-  - **Stale Pre-OFF Mode Filtering**: Ignores stale pre-OFF mode callbacks from Karoo OS when a light is set to `OFF`, preventing status sticking on Ravemen FR300 ANT+ and similar lights.
 - **BLE Stack & Low-Traffic Optimization**:
   - **Balanced Scan Mode**: Replaced `SCAN_MODE_LOW_LATENCY` with `SCAN_MODE_BALANCED` and added a 10-second auto-timeout to prevent Bluetooth hardware congestion.
   - **Adaptive Reconnection Backoff**: Exponential backoff (3s fast reconnect for 30s $\rightarrow$ 10s $\rightarrow$ 60s background max) to eliminate GATT connection timeouts and Bluetooth stack crashes when lights are powered off.
-  - **75ms Inter-Chunk Delay**: Increased chunk delay for multi-part GATT frames to 75ms to match standard BLE connection event intervals.
 - **Advanced Light Modes**: Dynamic passthrough of 100% of all ANT+ light modes reported by Karoo OS (including `DAY_FLASH`, `NIGHT_PULSE`, `CUSTOM_MODE_1..8`, etc.) with on-demand parameter refresh `▼`.
 - **Intelligent Status UI**: 
   - Top-left status dot: Turns Authentic Karoo Turquoise when all configured lights are online and connected, White when searching or offline.
@@ -53,10 +56,19 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 
 ## 🚲 Hardware Compatibility
 - **Tested Hardware**: Magene AT1200, Magicshine Hori 1300Pro, Ravemen FR300 ANT+, Coospo TR70, Cycplus L7 radar, and iGPSPORT VS1800S.
-- **ANT+**: Works with all smart lights recognized by Karoo. Fixed `LightCommandConnectionAIDL` transaction descriptor matching (`TX 18`) to restore instant ANT+ control.
+- **ANT+**: Works with all smart lights recognized by Karoo. Compatible with Karoo OS firmware `1.669.2569.20`.
 - **Bluetooth (BLE)**: Tested with Magicshine Hori 1300S / 1300Pro and iGPSPORT VS1800S. Implemented speculative support for VS1200S, VS800S, and VS500 series smart lights based on igpsport-karoo.
 
 ## 📝 Changelog
+### v0.1.6-R5 "iGPSport"
+- **KAROO OS 1.669.2569.20 COMPATIBILITY FIX**: Integrated local write-only Parcelable stand-ins (`HammerheadDeviceParcel` and `LightMode`) inspired by **Stefano Zaffarano**'s ([szaffarano](https://github.com/szaffarano)) [karoofirefly](https://github.com/szaffarano/karoofirefly) PR #51 to bypass SELinux package read restrictions (`kos_app_file`) and restore ANT+ light control Binder IPC transactions with Karoo's `SensorService`.
+- **REAL-TIME DATA FIELD INDICATORS**:
+  - **`G-BRAKE` Indicator**: Displays real-time **`G-BRAKE`** text in official Karoo Red (`#E52E2E`) while decelerating above G-sensitivity threshold.
+  - **`SECONDARY` Speed-Adaptive Indicator**: Displays **`SECONDARY`** when exceeding target GPS speed and automatically reverts to **`PRIMARY`** when speed drops below threshold.
+- **FACTORY RESET FEATURE**: Added a dedicated Factory Reset card with rounded corners in official Karoo Red (`#E52E2E`) that clears saved JSON preferences and UI cards, re-binds saved ANT+ lights, and triggers a fresh Bluetooth (BLE) light scan.
+- **FULL UI & CODE LOCALIZATION**: Complete English translation across all UI elements, settings screens, dialogs, and logging.
+- **CREDITS & ACKNOWLEDGMENTS**: Thanks to Stefano Zaffarano ([szaffarano](https://github.com/szaffarano)) for the Karoo OS 1.669 IPC parcelable workaround, and **Erkop33** and **lukaszzsch** for valuable guidance, ideas, and feedback.
+
 ### v0.1.6-R4 "iGPSport"
 - **iGPSPORT CUSTOM SLOTS FIX**: Restricted iGPSPORT custom profiles to **3 Custom Slots (`Custom 1`, `Custom 2`, `Custom 3`)** matching hardware firmware limits, and added dedicated per-slot rectangular `Save` buttons (4dp rounded corners) writing directly to all 3 LED channels (`HIGH_BEAM`, `LOW_BEAM`, `MAIN`) for VS1800S, VS1200S, VS800S, and VS500.
 - **EXPERIMENTAL G-BRAKE LIGHT**: Integrated Karoo accelerometer G-sensor brake light activation. Automatically triggers configurable brake light mode (e.g. Fast Flash) upon decelerating along the longitudinal Y-axis above target sensitivity (`0.10 g` to `0.50 g`) for at least **200ms continuous deceleration**, with configurable hold time (`0 s` to `5 s`), displaying priority hierarchy: Hard OFF > Radar Threat > G-Brake Light.
@@ -130,9 +142,6 @@ To allow this extension to control your lights, you **must** disable the Karoo's
 - **UI**: Top-left lamp status indicator.
 - **FIX**: Resolved "black screen" issues by simplifying the layout.
 
-### v0.1.0-alpha
-- Initial major alpha release with View-Aware logic and Radar fallback.
-
 ### v0.0.3
 - Added configurable OFF-Mode.
 - Added status rotation and color-coding.
@@ -166,6 +175,8 @@ If you want to fork, build, or contribute to **LightONKaroo** (or use AI develop
 
 ## 📜 License & Credits
 - Licensed under the **MIT License**.
+- **Stefano Zaffarano** ([szaffarano](https://github.com/szaffarano)): Author of [karoofirefly](https://github.com/szaffarano/karoofirefly) fork and PR #51 IPC parcelable workaround for Karoo OS 1.669 (MIT License).
+- **Erkop33** & **lukaszzsch**: Community contributors for guidance, ideas, and feedback.
 - **Tiago Fontes Dias** ([tiagodias00](https://github.com/tiagodias00)): Author of [igpsport-karoo](https://github.com/tiagodias00/igpsport-karoo) (MIT License).
 - **Dennis Straßer** ([derstrassi](https://github.com/derstrassi)): Author of [KarooFireFly](https://github.com/derstrassi/karoofirefly) (MIT License).
 - **Peter Weber** ([JaJaJim](https://github.com/JaJaJim)): Project maintainer of LightONKaroo.

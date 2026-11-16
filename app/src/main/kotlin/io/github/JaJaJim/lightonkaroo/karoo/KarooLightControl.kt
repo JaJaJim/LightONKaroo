@@ -34,7 +34,6 @@ class KarooLightControl(private val context: Context) : LightController {
         private const val LISTENER_DESCRIPTOR = "io.hammerhead.aidlrx.IParcelableListener"
         private const val TX_REGISTER_LIGHT_PARAMS = 1
         private const val TX_SET_LIGHT_MODE = 3
-        private const val TX_GET_LIGHT_CMD = 18
     }
 
     private var sensorBinder: IBinder? = null
@@ -51,7 +50,6 @@ class KarooLightControl(private val context: Context) : LightController {
     private val _actualModes = MutableStateFlow<Map<String, String>>(emptyMap())
     val actualModes: StateFlow<Map<String, String>> = _actualModes
     private val lastCommandedMode = ConcurrentHashMap<String, String>()
-    private var lightModeEnumClass: Class<out Enum<*>>? = null
     private val registeredListeners = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val pendingRegistrations = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val pendingLightParamRegistrations = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
@@ -85,7 +83,7 @@ class KarooLightControl(private val context: Context) : LightController {
             if (service != null) {
                 serviceExecutor.execute {
                     getLightCommandBinder(service)
-                    loadLightModeClass()
+                    prepareLightControl()
                 }
             }
         }
@@ -128,66 +126,22 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    private fun loadLightModeClass() {
-        try {
-            val sensorCtx = context.createPackageContext(
-                "io.hammerhead.sensorservice",
-                Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY,
-            )
-            val cls = sensorCtx.classLoader.loadClass(
-                "io.hammerhead.datamodels.timeseriesData.models.LightMode",
-            )
-            @Suppress("UNCHECKED_CAST")
-            val enumClass = cls as Class<out Enum<*>>
-            val enumConstants = enumClass.enumConstants
-            Timber.i("$TAG: Karoo LightMode enum values (${enumConstants?.size}): ${enumConstants?.joinToString { it.name }}")
-            lightModeEnumClass = enumClass
-            lightModeParcelableCreator = { modeName ->
-                java.lang.Enum.valueOf(enumClass, modeName) as Parcelable
-            }
-
-            val deviceClass = sensorCtx.classLoader.loadClass(
-                "io.hammerhead.datamodels.timeseriesData.models.Device",
-            )
-            val defaultMarkerClass = sensorCtx.classLoader.loadClass(
-                "kotlin.jvm.internal.DefaultConstructorMarker",
-            )
-            val deviceConstructor = deviceClass.constructors.find { c ->
-                (c.parameterTypes.lastOrNull() == defaultMarkerClass) &&
-                    (c.parameterTypes[c.parameterTypes.size - 2] == Int::class.javaPrimitiveType)
-            }
-            if (deviceConstructor != null) {
-                Timber.d("$TAG: Device constructor: ${deviceConstructor.parameterTypes.map { it.simpleName }}")
-                val deviceInfoConstructor = sensorCtx.classLoader.loadClass(
-                    "io.hammerhead.datamodels.timeseriesData.models.DeviceInfo",
-                ).getDeclaredConstructor()
-
-                deviceCreator = { uid ->
-                    val deviceInfo = deviceInfoConstructor.newInstance()
-                    val params = arrayOfNulls<Any>(deviceConstructor.parameterTypes.size)
-                    params[0] = uid
-                    params[1] = deviceInfo
-                    params[4] = false
-                    params[5] = true
-                    params[params.size - 2] = 0x1FFFC
-                    params[params.size - 1] = null
-                    deviceConstructor.newInstance(*params) as Parcelable
-                }
-                Timber.d("$TAG: Device creator ready")
-            } else {
-                Timber.w("$TAG: Could not find Device constructor with DefaultConstructorMarker")
-            }
-
-            Timber.d("$TAG: LightMode class loaded")
-
-            pendingRegistrations.toList().forEach { registerConnectionState(it) }
-            pendingRegistrations.clear()
-            pendingLightParamRegistrations.toList().forEach { registerForLightParameters(it) }
-            pendingLightParamRegistrations.clear()
-            onServiceReady?.invoke()
-        } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to load LightMode class")
+    private fun prepareLightControl() {
+        lightModeParcelableCreator = { modeName ->
+            io.hammerhead.datamodels.timeseriesData.models.LightMode(modeName)
         }
+
+        deviceCreator = { uid ->
+            HammerheadDeviceParcel(uid)
+        }
+
+        Timber.d("$TAG: LightMode and Device creators ready")
+
+        pendingRegistrations.toList().forEach { registerConnectionState(it) }
+        pendingRegistrations.clear()
+        pendingLightParamRegistrations.toList().forEach { registerForLightParameters(it) }
+        pendingLightParamRegistrations.clear()
+        onServiceReady?.invoke()
     }
 
     fun bind() {
